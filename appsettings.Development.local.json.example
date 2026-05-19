@@ -1,0 +1,23 @@
+{
+  "MessengerFunction": {
+    "Code": "paste-azure-function-key"
+  },
+  "AzureOpenAI": {
+    "Resource": "https://your-resource.cognitiveservices.azure.com",
+    "ApiKey": "paste-azure-openai-key",
+    "ImageApiKey": "paste-azure-openai-key",
+    "ChatApiKey": "paste-azure-openai-key"
+  },
+  "ConnectionStrings": {
+    "NextHireDb": "Server=...;User ID=...;Password=...;"
+  },
+  "MetaAds": {
+    "AccessToken": "paste-meta-token"
+  },
+  "Nexa": {
+    "ApiKey": "paste-nexa-api-key"
+  },
+  "Jwt": {
+    "SigningKey": "your-local-signing-key-at-least-32-chars"
+  }
+}
