@@ -645,6 +645,26 @@ public class SourcingRepository : ISourcingRepository
         });
     }
 
+    public async Task<string?> GetActiveSourceConnectionConfigJsonAsync(
+        Guid orgId,
+        string sourceTypeCode,
+        CancellationToken cancellationToken = default)
+    {
+        const string sql = @"
+            SELECT config_json
+            FROM sourcing_source_connections
+            WHERE org_id = @orgId
+              AND source_type_code = @sourceTypeCode
+              AND is_connected = 1
+              AND is_active = 1
+              AND config_json IS NOT NULL
+              AND LTRIM(RTRIM(config_json)) <> '';";
+
+        using var connection = _connectionFactory.CreateConnection();
+        return await connection.QueryFirstOrDefaultAsync<string?>(
+            new CommandDefinition(sql, new { orgId, sourceTypeCode }, cancellationToken: cancellationToken));
+    }
+
     public async Task<PagedResult<SourcingCampaignListItemDto>> GetCampaignsPagedAsync(
         Guid orgId,
         Guid? jobId,
@@ -712,8 +732,154 @@ public class SourcingRepository : ISourcingRepository
         };
     }
 
+    public async Task EnsureCampaignsSchemaAsync(CancellationToken cancellationToken = default)
+    {
+        const string sql = @"
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'sourcing_campaigns' AND schema_id = SCHEMA_ID('dbo'))
+BEGIN
+    CREATE TABLE dbo.sourcing_campaigns
+    (
+        id UNIQUEIDENTIFIER NOT NULL CONSTRAINT PK_sourcing_campaigns PRIMARY KEY,
+        org_id UNIQUEIDENTIFIER NOT NULL,
+        job_id UNIQUEIDENTIFIER NULL,
+        name NVARCHAR(240) NOT NULL,
+        platform NVARCHAR(80) NOT NULL,
+        status NVARCHAR(40) NOT NULL CONSTRAINT DF_sourcing_campaigns_status DEFAULT ('draft'),
+        daily_budget DECIMAL(18, 2) NULL,
+        total_budget DECIMAL(18, 2) NULL,
+        currency NVARCHAR(8) NOT NULL CONSTRAINT DF_sourcing_campaigns_currency DEFAULT ('USD'),
+        start_date DATETIMEOFFSET NULL,
+        end_date DATETIMEOFFSET NULL,
+        landing_page_url NVARCHAR(2000) NULL,
+        tracking_code NVARCHAR(120) NULL,
+        external_campaign_id NVARCHAR(240) NULL,
+        external_ad_account_id NVARCHAR(240) NULL,
+        created_at DATETIMEOFFSET NOT NULL CONSTRAINT DF_sourcing_campaigns_created DEFAULT (SYSUTCDATETIME()),
+        updated_at DATETIMEOFFSET NOT NULL CONSTRAINT DF_sourcing_campaigns_updated DEFAULT (SYSUTCDATETIME())
+    );
+END";
+
+        using var connection = _connectionFactory.CreateConnection();
+        await connection.ExecuteAsync(new CommandDefinition(sql, cancellationToken: cancellationToken));
+    }
+
+    public async Task<SourcingCampaignDetailDto> UpsertMetaAdsCampaignAsync(
+        Guid orgId,
+        Guid campaignId,
+        Guid jobId,
+        string name,
+        string sourcingStatus,
+        decimal? dailyBudget,
+        string? landingPageUrl,
+        string metaCampaignId,
+        string adAccountId,
+        CancellationToken cancellationToken = default)
+    {
+        await EnsureCampaignsSchemaAsync(cancellationToken);
+
+        const string sql = @"
+MERGE dbo.sourcing_campaigns AS target
+USING (SELECT @campaignId AS id) AS source
+ON target.id = source.id
+WHEN MATCHED THEN
+    UPDATE SET
+        org_id = @orgId,
+        job_id = @jobId,
+        name = @name,
+        platform = N'meta',
+        status = @status,
+        daily_budget = @dailyBudget,
+        landing_page_url = @landingPageUrl,
+        external_campaign_id = @metaCampaignId,
+        external_ad_account_id = @adAccountId,
+        updated_at = SYSUTCDATETIME()
+WHEN NOT MATCHED THEN
+    INSERT (
+        id, org_id, job_id, name, platform, status,
+        daily_budget, currency, landing_page_url,
+        external_campaign_id, external_ad_account_id,
+        created_at, updated_at
+    )
+    VALUES (
+        @campaignId, @orgId, @jobId, @name, N'meta', @status,
+        @dailyBudget, N'USD', @landingPageUrl,
+        @metaCampaignId, @adAccountId,
+        SYSUTCDATETIME(), SYSUTCDATETIME()
+    );";
+
+        using var connection = _connectionFactory.CreateConnection();
+        await connection.ExecuteAsync(new CommandDefinition(
+            sql,
+            new
+            {
+                campaignId,
+                orgId,
+                jobId,
+                name,
+                status = sourcingStatus,
+                dailyBudget,
+                landingPageUrl,
+                metaCampaignId,
+                adAccountId
+            },
+            cancellationToken: cancellationToken));
+
+        var detail = await GetCampaignByIdAsync(orgId, campaignId);
+        return detail ?? throw new InvalidOperationException("Meta campaign sourcing row could not be reloaded.");
+    }
+
+    public async Task EnsureMetaAdsCampaignRowAsync(
+        Guid orgId,
+        Guid campaignId,
+        Guid jobId,
+        string name,
+        string sourcingStatus,
+        decimal? dailyBudget,
+        string? landingPageUrl,
+        string metaCampaignId,
+        string adAccountId,
+        CancellationToken cancellationToken = default)
+    {
+        await EnsureCampaignsSchemaAsync(cancellationToken);
+
+        const string sql = @"
+IF NOT EXISTS (SELECT 1 FROM dbo.sourcing_campaigns WHERE id = @campaignId)
+BEGIN
+    INSERT INTO dbo.sourcing_campaigns (
+        id, org_id, job_id, name, platform, status,
+        daily_budget, currency, landing_page_url,
+        external_campaign_id, external_ad_account_id,
+        created_at, updated_at
+    )
+    VALUES (
+        @campaignId, @orgId, @jobId, @name, N'meta', @status,
+        @dailyBudget, N'USD', @landingPageUrl,
+        @metaCampaignId, @adAccountId,
+        SYSUTCDATETIME(), SYSUTCDATETIME()
+    );
+END";
+
+        using var connection = _connectionFactory.CreateConnection();
+        await connection.ExecuteAsync(new CommandDefinition(
+            sql,
+            new
+            {
+                campaignId,
+                orgId,
+                jobId,
+                name,
+                status = sourcingStatus,
+                dailyBudget,
+                landingPageUrl,
+                metaCampaignId,
+                adAccountId
+            },
+            cancellationToken: cancellationToken));
+    }
+
     public async Task<SourcingCampaignDetailDto> CreateCampaignAsync(Guid orgId, CreateSourcingCampaignRequestDto dto)
     {
+        await EnsureCampaignsSchemaAsync();
         var id = Guid.NewGuid();
         var status = string.IsNullOrWhiteSpace(dto.Status) ? SourcingConstants.DefaultCampaignStatus : dto.Status.Trim();
         var currency = string.IsNullOrWhiteSpace(dto.Currency) ? SourcingConstants.DefaultCurrency : dto.Currency.Trim();
