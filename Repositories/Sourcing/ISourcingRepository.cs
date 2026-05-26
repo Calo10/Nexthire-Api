@@ -38,6 +38,14 @@ public interface ISourcingRepository
 
     Task UpsertSourceConnectionAsync(Guid orgId, UpsertSourcingSourceConnectionRequestDto dto);
 
+    /// <summary>
+    /// Active Meta connection JSON from <c>sourcing_source_connections.config_json</c>, or null if not connected.
+    /// </summary>
+    Task<string?> GetActiveSourceConnectionConfigJsonAsync(
+        Guid orgId,
+        string sourceTypeCode,
+        CancellationToken cancellationToken = default);
+
     Task<PagedResult<SourcingCampaignListItemDto>> GetCampaignsPagedAsync(
         Guid orgId,
         Guid? jobId,
@@ -47,7 +55,35 @@ public interface ISourcingRepository
         int page,
         int pageSize);
 
+    Task EnsureCampaignsSchemaAsync(CancellationToken cancellationToken = default);
+
     Task<SourcingCampaignDetailDto> CreateCampaignAsync(Guid orgId, CreateSourcingCampaignRequestDto dto);
+
+    /// <summary>Inserts or updates a Meta-linked row in <c>sourcing_campaigns</c> using a fixed id (matches <c>marketing_meta_campaigns</c>).</summary>
+    Task<SourcingCampaignDetailDto> UpsertMetaAdsCampaignAsync(
+        Guid orgId,
+        Guid campaignId,
+        Guid jobId,
+        string name,
+        string sourcingStatus,
+        decimal? dailyBudget,
+        string? landingPageUrl,
+        string metaCampaignId,
+        string adAccountId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Inserts a Meta-linked row only if missing (does not overwrite status on list sync).</summary>
+    Task EnsureMetaAdsCampaignRowAsync(
+        Guid orgId,
+        Guid campaignId,
+        Guid jobId,
+        string name,
+        string sourcingStatus,
+        decimal? dailyBudget,
+        string? landingPageUrl,
+        string metaCampaignId,
+        string adAccountId,
+        CancellationToken cancellationToken = default);
 
     Task<SourcingCampaignDetailDto?> GetCampaignByIdAsync(Guid orgId, Guid campaignId);
 

@@ -478,7 +478,7 @@ public class SourcingService : ISourcingService
         await _sourcing.UpsertSourceConnectionAsync(orgId, dto);
     }
 
-    public Task<PagedResult<SourcingCampaignListItemDto>> GetCampaignsAsync(
+    public async Task<PagedResult<SourcingCampaignListItemDto>> GetCampaignsAsync(
         Guid orgId,
         Guid? jobId,
         string? platform,
@@ -487,11 +487,13 @@ public class SourcingService : ISourcingService
         int page,
         int pageSize)
     {
+        await _metaAdsService.SyncMarketingCampaignsToSourcingAsync(orgId);
+
         var (p, ps) = SourcingValidation.NormalizePaging(page, pageSize);
         if (!string.IsNullOrWhiteSpace(status))
             SourcingValidation.ValidateCampaignStatus(status.Trim().ToLowerInvariant());
 
-        return _sourcing.GetCampaignsPagedAsync(
+        return await _sourcing.GetCampaignsPagedAsync(
             orgId,
             jobId,
             string.IsNullOrWhiteSpace(platform) ? null : platform.Trim(),
@@ -516,9 +518,41 @@ public class SourcingService : ISourcingService
         return created;
     }
 
-    public Task<SourcingCampaignDetailDto?> GetCampaignAsync(Guid orgId, Guid campaignId)
+    public async Task<SourcingCampaignDetailDto?> GetCampaignAsync(Guid orgId, Guid campaignId)
     {
-        return _sourcing.GetCampaignByIdAsync(orgId, campaignId);
+        var campaign = await _sourcing.GetCampaignByIdAsync(orgId, campaignId);
+        if (campaign != null)
+            return campaign;
+
+        var meta = await _metaAdsService.GetMarketingCampaignAsync(orgId, campaignId);
+        if (meta == null)
+            return null;
+
+        return MapMetaMarketingCampaignToSourcingDetail(meta);
+    }
+
+    private static SourcingCampaignDetailDto MapMetaMarketingCampaignToSourcingDetail(MetaMarketingCampaignDto meta) =>
+        new()
+        {
+            Id = meta.Id,
+            JobId = meta.JobId,
+            Name = meta.CampaignName,
+            Platform = "meta",
+            Status = MapMetaStatusToSourcingStatus(meta.Status),
+            Currency = SourcingConstants.DefaultCurrency,
+            LandingPageUrl = meta.DestinationUrl,
+            ExternalCampaignId = meta.MetaCampaignId,
+            CreatedAt = meta.CreatedAtUtc,
+            UpdatedAt = meta.UpdatedAtUtc
+        };
+
+    private static string MapMetaStatusToSourcingStatus(string metaStatus)
+    {
+        if (string.Equals(metaStatus, "ACTIVE", StringComparison.OrdinalIgnoreCase))
+            return "active";
+        if (string.Equals(metaStatus, "PAUSED", StringComparison.OrdinalIgnoreCase))
+            return "paused";
+        return metaStatus.Trim().ToLowerInvariant();
     }
 
     public async Task<SourcingCampaignDetailDto?> UpdateCampaignAsync(Guid orgId, Guid campaignId, UpdateSourcingCampaignRequestDto dto)
@@ -534,14 +568,28 @@ public class SourcingService : ISourcingService
         var status = dto.Status.Trim().ToLowerInvariant();
         SourcingValidation.ValidateCampaignStatus(status);
 
-        var updated = await _sourcing.PatchCampaignStatusAsync(orgId, campaignId, status);
+        var campaign = await _sourcing.GetCampaignByIdAsync(orgId, campaignId);
+        if (campaign == null)
+            return null;
 
-        if (updated != null && string.Equals(status, "active", StringComparison.OrdinalIgnoreCase))
+        var isMetaLinked =
+            string.Equals(campaign.Platform, "meta", StringComparison.OrdinalIgnoreCase) ||
+            !string.IsNullOrWhiteSpace(campaign.ExternalCampaignId);
+
+        if (isMetaLinked)
         {
-            // TODO: Meta Ads API — activate remote campaign when integration is available.
+            var campaignRef = campaignId.ToString("D");
+            if (string.Equals(status, "active", StringComparison.OrdinalIgnoreCase))
+                await _metaAdsService.ActivateMarketingCampaignAsync(orgId, campaignRef);
+            else if (string.Equals(status, "paused", StringComparison.OrdinalIgnoreCase))
+                await _metaAdsService.PauseMarketingCampaignAsync(orgId, campaignRef);
+            else
+                await _sourcing.PatchCampaignStatusAsync(orgId, campaignId, status);
+
+            return await _sourcing.GetCampaignByIdAsync(orgId, campaignId);
         }
 
-        return updated;
+        return await _sourcing.PatchCampaignStatusAsync(orgId, campaignId, status);
     }
 
     public async Task<bool> DeleteCampaignAsync(Guid orgId, Guid campaignId)
@@ -550,15 +598,39 @@ public class SourcingService : ISourcingService
         if (campaign == null)
             return false;
 
-        if (!string.IsNullOrWhiteSpace(campaign.ExternalCampaignId))
+        var isMetaLinked =
+            string.Equals(campaign.Platform, "meta", StringComparison.OrdinalIgnoreCase) ||
+            !string.IsNullOrWhiteSpace(campaign.ExternalCampaignId);
+
+        if (isMetaLinked)
         {
             _logger.LogInformation(
-                "Deleting remote Meta campaign before DB delete. OrgId={OrgId} CampaignId={CampaignId} MetaCampaignId={MetaCampaignId}",
+                "Deleting Meta-linked campaign. OrgId={OrgId} CampaignId={CampaignId} MetaCampaignId={MetaCampaignId}",
                 orgId,
                 campaignId,
                 campaign.ExternalCampaignId);
 
-            await _metaAdsService.DeleteMetaCampaignNodeAsync(campaign.ExternalCampaignId!);
+            try
+            {
+                await _metaAdsService.DeleteMarketingCampaignRecordAsync(
+                    orgId,
+                    campaignId.ToString("D"));
+                return true;
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "No marketing_meta_campaigns row for {CampaignId}; deleting remote Meta object and sourcing row.",
+                    campaignId);
+
+                if (!string.IsNullOrWhiteSpace(campaign.ExternalCampaignId))
+                {
+                    await _metaAdsService.DeleteMetaCampaignNodeAsync(
+                        orgId,
+                        campaign.ExternalCampaignId);
+                }
+            }
         }
 
         return await _sourcing.DeleteCampaignAsync(orgId, campaignId);

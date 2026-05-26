@@ -221,7 +221,6 @@ builder.Services.AddScoped<ISourcingRepository, SourcingRepository>();
 builder.Services.AddScoped<IWhatsAppInboundRepository, WhatsAppInboundRepository>();
 builder.Services.AddScoped<ISourcingService, SourcingService>();
 builder.Services.AddScoped<IMarketingMetaCampaignRepository, MarketingMetaCampaignRepository>();
-builder.Services.Configure<MetaAdsOptions>(builder.Configuration.GetSection(MetaAdsOptions.SectionName));
 builder.Services.AddHttpClient("MetaGraph", client =>
 {
     client.Timeout = TimeSpan.FromMinutes(5);
@@ -240,6 +239,8 @@ builder.Services.AddHttpClient("Nexa", client =>
 {
     var baseUrl = builder.Configuration["Nexa:BaseUrl"] ?? "http://localhost:5278/";
     client.BaseAddress = new Uri(baseUrl);
+    client.Timeout = TimeSpan.FromSeconds(
+        builder.Configuration.GetValue<int?>("Nexa:RequestTimeoutSeconds") ?? 15);
 });
 
 // Azure Function for document uploads (set env var DOCUMENTS_FUNCTION_BASE_URL, e.g. http://localhost:7071/)
@@ -271,13 +272,15 @@ builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddSingleton<INexaTokenStore, NexaTokenStore>();
 builder.Services.AddSingleton<IAuthLinkTokenStore, AuthLinkTokenStore>();
 
-// CORS: lista explícita (más estable que IsLoopback con IPv6 / algunos hosts).
+// CORS: en Development acepta cualquier puerto en loopback (Vite puede usar 5174, [::1], etc.).
 var corsOrigins = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
 {
     "http://localhost:5173",
     "https://localhost:5173",
     "http://127.0.0.1:5173",
     "https://127.0.0.1:5173",
+    "http://[::1]:5173",
+    "https://[::1]:5173",
 };
 var configuredFront = builder.Configuration["Frontend:BaseUrl"]?.Trim().TrimEnd('/');
 if (!string.IsNullOrEmpty(configuredFront))
@@ -289,14 +292,35 @@ foreach (var o in builder.Configuration.GetSection("Cors:Origins").Get<string[]>
         corsOrigins.Add(t);
 }
 
+static bool IsLocalDevFrontendOrigin(string origin)
+{
+    if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri))
+        return false;
+
+    if (uri.Scheme is not "http" and not "https")
+        return false;
+
+    return uri.Host is "localhost" or "127.0.0.1" or "[::1]";
+}
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins(corsOrigins.ToArray())
-              .AllowAnyMethod()
-              .AllowAnyHeader()
-              .AllowCredentials();
+        if (builder.Environment.IsDevelopment())
+        {
+            policy.SetIsOriginAllowed(IsLocalDevFrontendOrigin)
+                  .AllowAnyMethod()
+                  .AllowAnyHeader()
+                  .AllowCredentials();
+        }
+        else
+        {
+            policy.WithOrigins(corsOrigins.ToArray())
+                  .AllowAnyMethod()
+                  .AllowAnyHeader()
+                  .AllowCredentials();
+        }
     });
 });
 
@@ -326,5 +350,42 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
+await EnsureMarketingMetaCampaignsSchemaAsync(app.Services);
+await EnsureSourcingCampaignsSchemaAsync(app.Services);
+
 app.Run();
+
+static async Task EnsureSourcingCampaignsSchemaAsync(IServiceProvider services)
+{
+    using var scope = services.CreateScope();
+    var repo = scope.ServiceProvider.GetRequiredService<ISourcingRepository>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        await repo.EnsureCampaignsSchemaAsync();
+        logger.LogInformation("sourcing_campaigns table is ready.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to ensure sourcing_campaigns schema.");
+    }
+}
+
+static async Task EnsureMarketingMetaCampaignsSchemaAsync(IServiceProvider services)
+{
+    using var scope = services.CreateScope();
+    var repo = scope.ServiceProvider.GetRequiredService<IMarketingMetaCampaignRepository>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        await repo.EnsureSchemaAsync();
+        logger.LogInformation("marketing_meta_campaigns table is ready.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(
+            ex,
+            "Failed to ensure marketing_meta_campaigns schema. Meta campaign creates may fail to persist locally.");
+    }
+}
 

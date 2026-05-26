@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Http;
+using nexthire_api.DTOs.Meta;
 
 namespace nexthire_api.DTOs;
 
@@ -46,66 +47,127 @@ public class UploadMetaImageResponse
 
 public class CreateMetaCampaignRequest
 {
+    // --- Local (NextHire) metadata — not sent to Meta ---
+
     [Required]
     public string TenantId { get; set; } = string.Empty;
 
     [Required]
     public Guid JobId { get; set; }
 
-    [Required]
-    [MaxLength(250)]
-    public string CampaignName { get; set; } = string.Empty;
-
-    [Required]
-    public string Objective { get; set; } = "OUTCOME_TRAFFIC";
-
-    [Range(1, int.MaxValue)]
-    public int DailyBudget { get; set; }
-
-    [Required]
-    [MaxLength(10)]
-    public string Country { get; set; } = string.Empty;
-
-    [Range(13, 65)]
-    public int AgeMin { get; set; }
-
-    [Range(13, 65)]
-    public int AgeMax { get; set; }
-
-    [Required]
-    [MinLength(1)]
-    public string[] Platforms { get; set; } = Array.Empty<string>();
-
-    [Required]
-    [RegularExpression("^(whatsapp|job_post_url)$")]
-    public string DestinationType { get; set; } = string.Empty;
-
-    [Required]
-    public string DestinationUrl { get; set; } = string.Empty;
+    /// <summary>
+    /// <c>whatsapp</c> = link ad to a <c>wa.me</c> URL (no Page↔WABA link required; legacy behavior).
+    /// <c>whatsapp_native</c> = Meta Click-to-WhatsApp (requires Page linked to WhatsApp Business).
+    /// <c>job_post_url</c> = web traffic to a public job URL.
+    /// </summary>
+    [RegularExpression("^(whatsapp|whatsapp_native|job_post_url)$")]
+    public string? DestinationType { get; set; }
 
     public string? WhatsappMessage { get; set; }
 
-    [Required]
-    public string AdText { get; set; } = string.Empty;
+    /// <summary>Ignored — local row is always saved after Meta succeeds. Kept for API compatibility.</summary>
+    public bool PersistLocalRecord { get; set; } = true;
+
+    // --- Full Graph API control (see Meta Marketing API). ExtensionData on each type accepts any extra field. ---
 
     [Required]
-    public string CtaType { get; set; } = "LEARN_MORE";
+    public MetaCampaignGraphPayload? Campaign { get; set; }
 
     [Required]
-    [MaxLength(200)]
-    public string ImageHash { get; set; } = string.Empty;
+    public MetaAdSetGraphPayload? AdSet { get; set; }
 
-    /// <summary>Ignored for creation — objects are always PAUSED in Meta.</summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public string? Status { get; set; }
+    [Required]
+    public MetaAdCreativeGraphPayload? Creative { get; set; }
+
+    [Required]
+    public MetaAdGraphPayload? Ad { get; set; }
 }
 
 public class CreateMetaCampaignResponse
 {
+    /// <summary>Local <c>marketing_meta_campaigns</c> row id.</summary>
+    public Guid? LocalRecordId { get; set; }
+
+    public bool PersistedLocally { get; set; }
+
     public string CampaignId { get; set; } = string.Empty;
     public string AdSetId { get; set; } = string.Empty;
     public string CreativeId { get; set; } = string.Empty;
     public string AdId { get; set; } = string.Empty;
     public string AdAccountId { get; set; } = string.Empty;
     public string AdsManagerUrl { get; set; } = string.Empty;
+}
+
+public class MetaMarketingCampaignActionResponse
+{
+    public Guid? LocalRecordId { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public string? MetaCampaignId { get; set; }
+    public string? MetaAdSetId { get; set; }
+    public string? MetaAdId { get; set; }
+}
+
+/// <summary>Row from <c>dbo.marketing_meta_campaigns</c> (not <c>sourcing_campaigns</c>).</summary>
+public class MetaMarketingCampaignDto
+{
+    public Guid Id { get; set; }
+    public Guid JobId { get; set; }
+    public string CampaignName { get; set; } = string.Empty;
+    public string DestinationType { get; set; } = string.Empty;
+    public string DestinationUrl { get; set; } = string.Empty;
+    public string? WhatsappMessage { get; set; }
+    public string AdText { get; set; } = string.Empty;
+    public string ImageHash { get; set; } = string.Empty;
+    public string? MetaCampaignId { get; set; }
+    public string? MetaAdSetId { get; set; }
+    public string? MetaCreativeId { get; set; }
+    public string? MetaAdId { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public DateTime CreatedAtUtc { get; set; }
+    public DateTime UpdatedAtUtc { get; set; }
+}
+
+public class ResolveMetaGeoRequest
+{
+    /// <summary>
+    /// Human label from the UI (can come from Google Places), e.g. "Miami, FL, USA".
+    /// </summary>
+    [Required]
+    [MaxLength(300)]
+    public string Query { get; set; } = string.Empty;
+
+    /// <summary>Optional ISO country code to constrain search, e.g. "US".</summary>
+    [MaxLength(5)]
+    public string? CountryCode { get; set; }
+
+    /// <summary>Optional location types to constrain results: city, region, country, zip.</summary>
+    public string[]? LocationTypes { get; set; }
+
+    /// <summary>Max results to return (default 10).</summary>
+    [Range(1, 50)]
+    public int? Limit { get; set; }
+}
+
+public class ResolveMetaGeoResponse
+{
+    public IReadOnlyList<MetaGeoCandidate> Candidates { get; set; } = Array.Empty<MetaGeoCandidate>();
+
+    /// <summary>Best guess candidate (usually first result).</summary>
+    public MetaGeoCandidate? Best { get; set; }
+}
+
+public class MetaGeoCandidate
+{
+    /// <summary>Meta geo key used in targeting payloads.</summary>
+    public string Key { get; set; } = string.Empty;
+
+    /// <summary>Display name from Meta.</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>Meta location type, e.g. city/region/country/zip.</summary>
+    public string? Type { get; set; }
+
+    public string? CountryCode { get; set; }
+    public string? CountryName { get; set; }
+    public string? Region { get; set; }
 }
