@@ -88,7 +88,38 @@ public class MetaAdsController : ControllerBase
         }
     }
 
-    /// <summary>Create a paused Meta campaign, ad set, creative, and ad; persist local record.</summary>
+    /// <summary>List rows from <c>marketing_meta_campaigns</c> (Meta Ads). Not <c>/api/sourcing/campaigns</c>.</summary>
+    [HttpGet("campaigns")]
+    [ProducesResponseType(typeof(IReadOnlyList<MetaMarketingCampaignDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ListCampaigns(
+        [FromQuery] Guid? jobId,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetOrgId(out var orgId, out var unauthorized))
+            return unauthorized!;
+
+        var items = await _metaAdsService.ListMarketingCampaignsAsync(orgId, jobId, cancellationToken);
+        return Ok(items);
+    }
+
+    /// <summary>Get one row from <c>marketing_meta_campaigns</c> by local record id.</summary>
+    [HttpGet("campaigns/{localRecordId:guid}")]
+    [ProducesResponseType(typeof(MetaMarketingCampaignDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetCampaign(Guid localRecordId, CancellationToken cancellationToken)
+    {
+        if (!TryGetOrgId(out var orgId, out var unauthorized))
+            return unauthorized!;
+
+        var item = await _metaAdsService.GetMarketingCampaignAsync(orgId, localRecordId, cancellationToken);
+        return item == null ? NotFound() : Ok(item);
+    }
+
+    /// <summary>
+    /// Create Meta campaign, ad set, creative, and ad via Graph API.
+    /// Supports legacy flat fields and/or full <c>campaign</c>, <c>adSet</c>, <c>creative</c>, <c>ad</c> payloads
+    /// (any Meta Marketing API field via typed properties or ExtensionData).
+    /// </summary>
     [HttpPost("campaigns")]
     [ProducesResponseType(typeof(CreateMetaCampaignResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -122,6 +153,178 @@ public class MetaAdsController : ControllerBase
             _logger.LogWarning(
                 ex,
                 "Meta Graph error creating campaign. Status={Status}, Code={Code}",
+                ex.HttpStatus,
+                ex.MetaCode);
+            return StatusCode(
+                ex.HttpStatus is >= 400 and < 600 ? ex.HttpStatus : StatusCodes.Status502BadGateway,
+                new
+                {
+                    error = ex.Message,
+                    metaCode = ex.MetaCode,
+                    metaErrorUserTitle = ex.MetaErrorUserTitle,
+                    metaErrorUserMsg = ex.MetaErrorUserMsg
+                });
+        }
+    }
+
+    /// <summary>Activate campaign, ad set, and ad in Meta for a stored marketing record.</summary>
+    /// <param name="campaignRef">Local record GUID (<c>localRecordId</c>) or Meta <c>campaignId</c>.</param>
+    [HttpPost("campaigns/{campaignRef}/activate")]
+    [ProducesResponseType(typeof(MetaMarketingCampaignActionResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public async Task<IActionResult> ActivateCampaign(string campaignRef, CancellationToken cancellationToken)
+    {
+        if (!TryGetOrgId(out var orgId, out var unauthorized))
+            return unauthorized!;
+
+        return await ExecuteMetaCampaignAction(
+            ct => _metaAdsService.ActivateMarketingCampaignAsync(orgId, campaignRef, ct),
+            cancellationToken);
+    }
+
+    /// <summary>Pause campaign, ad set, and ad in Meta for a stored marketing record.</summary>
+    /// <param name="campaignRef">Local record GUID (<c>localRecordId</c>) or Meta <c>campaignId</c>.</param>
+    [HttpPost("campaigns/{campaignRef}/pause")]
+    [ProducesResponseType(typeof(MetaMarketingCampaignActionResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public async Task<IActionResult> PauseCampaign(string campaignRef, CancellationToken cancellationToken)
+    {
+        if (!TryGetOrgId(out var orgId, out var unauthorized))
+            return unauthorized!;
+
+        return await ExecuteMetaCampaignAction(
+            ct => _metaAdsService.PauseMarketingCampaignAsync(orgId, campaignRef, ct),
+            cancellationToken);
+    }
+
+    /// <summary>Delete the Meta campaign hierarchy and remove the local marketing record.</summary>
+    /// <param name="campaignRef">Local record GUID (<c>localRecordId</c>) or Meta <c>campaignId</c>.</param>
+    [HttpDelete("campaigns/{campaignRef}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public async Task<IActionResult> DeleteCampaign(string campaignRef, CancellationToken cancellationToken)
+    {
+        if (!TryGetOrgId(out var orgId, out var unauthorized))
+            return unauthorized!;
+
+        try
+        {
+            await _metaAdsService.DeleteMarketingCampaignRecordAsync(orgId, campaignRef, cancellationToken);
+            return NoContent();
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Meta campaign delete validation failed");
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Meta Ads configuration error");
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = ex.Message });
+        }
+        catch (MetaGraphApiException ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Meta Graph error deleting campaign. Status={Status}, Code={Code}",
+                ex.HttpStatus,
+                ex.MetaCode);
+            return StatusCode(
+                ex.HttpStatus is >= 400 and < 600 ? ex.HttpStatus : StatusCodes.Status502BadGateway,
+                new
+                {
+                    error = ex.Message,
+                    metaCode = ex.MetaCode,
+                    metaErrorUserTitle = ex.MetaErrorUserTitle,
+                    metaErrorUserMsg = ex.MetaErrorUserMsg
+                });
+        }
+    }
+
+    /// <summary>
+    /// Resolve a human location label (e.g. from Google Places) into Meta geo keys usable in ad set targeting.
+    /// </summary>
+    [HttpPost("geo/resolve")]
+    [ProducesResponseType(typeof(ResolveMetaGeoResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public async Task<IActionResult> ResolveGeo([FromBody] ResolveMetaGeoRequest request, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        if (!TryGetOrgId(out var orgId, out var unauthorized))
+            return unauthorized!;
+
+        try
+        {
+            var result = await _metaAdsService.ResolveGeoAsync(orgId, request, cancellationToken);
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Meta geo resolve validation failed");
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Meta Ads configuration error");
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = ex.Message });
+        }
+        catch (MetaGraphApiException ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Meta Graph error resolving geo. Status={Status}, Code={Code}",
+                ex.HttpStatus,
+                ex.MetaCode);
+            return StatusCode(
+                ex.HttpStatus is >= 400 and < 600 ? ex.HttpStatus : StatusCodes.Status502BadGateway,
+                new
+                {
+                    error = ex.Message,
+                    metaCode = ex.MetaCode,
+                    metaErrorUserTitle = ex.MetaErrorUserTitle,
+                    metaErrorUserMsg = ex.MetaErrorUserMsg
+                });
+        }
+    }
+
+    private async Task<IActionResult> ExecuteMetaCampaignAction(
+        Func<CancellationToken, Task<MetaMarketingCampaignActionResponse>> action,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await action(cancellationToken);
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Meta campaign action validation failed");
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Meta Ads configuration error");
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = ex.Message });
+        }
+        catch (MetaGraphApiException ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Meta Graph error on campaign action. Status={Status}, Code={Code}",
                 ex.HttpStatus,
                 ex.MetaCode);
             return StatusCode(
