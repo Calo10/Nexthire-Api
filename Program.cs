@@ -243,15 +243,10 @@ builder.Services.AddHttpClient("Nexa", client =>
         builder.Configuration.GetValue<int?>("Nexa:RequestTimeoutSeconds") ?? 15);
 });
 
-// Azure Function for document uploads (set env var DOCUMENTS_FUNCTION_BASE_URL, e.g. http://localhost:7071/)
+// Documents function upload — no BaseAddress (full URL + x-functions-key avoids query-string loss)
 builder.Services.AddHttpClient("Documents", client =>
 {
-    var baseUrl =
-        builder.Configuration["DOCUMENTS_FUNCTION_BASE_URL"]
-        ?? builder.Configuration["Documents:BaseUrl"];
-
-    if (!string.IsNullOrWhiteSpace(baseUrl))
-        client.BaseAddress = new Uri(baseUrl);
+    client.Timeout = TimeSpan.FromSeconds(120);
 });
 
 // DocumentService (download-url / analysis / etc)
