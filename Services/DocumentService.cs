@@ -20,17 +20,28 @@ public class DocumentService : IDocumentService
 
     public async Task<string> GetResumeDownloadUrlAsync(Guid orgId, Guid documentId, CancellationToken ct)
     {
-        var baseUrl = _configuration["DocumentService:BaseUrl"];
+        var baseUrl = ResumeDocumentsUploader.ResolveDocumentsBaseUrl(_configuration);
         if (string.IsNullOrWhiteSpace(baseUrl))
             throw new DocumentServiceException("DocumentService base URL is not configured.", upstreamStatusCode: null, kind: DocumentServiceErrorKind.Configuration);
 
-        var url = $"{baseUrl.TrimEnd('/')}/api/NextHire/{orgId}/documents/{documentId}/download-url";
+        var functionKey = ResumeDocumentsUploader.ResolveDocumentsFunctionKey(_configuration);
+        var url = ResumeDocumentsUploader.BuildDocumentsUri(
+            baseUrl,
+            $"{orgId}/documents/{documentId}/download-url",
+            functionKey);
 
         using var client = _httpClientFactory.CreateClient("DocumentService");
         using var request = new HttpRequestMessage(HttpMethod.Post, url)
         {
             Content = new StringContent("{}", Encoding.UTF8, "application/json")
         };
+        ResumeDocumentsUploader.ApplyDocumentsFunctionAuth(request, functionKey);
+
+        _logger.LogInformation(
+            "Requesting resume download-url from documents function. OrgId={OrgId}, DocumentId={DocumentId}, HasFunctionKey={HasFunctionKey}",
+            orgId,
+            documentId,
+            !string.IsNullOrWhiteSpace(functionKey));
 
         HttpResponseMessage resp;
         try
@@ -78,17 +89,28 @@ public class DocumentService : IDocumentService
 
     public async Task<DocumentAnalysisEnvelopeDto> GetResumeAnalysisAsync(Guid orgId, Guid documentId, CancellationToken ct)
     {
-        var baseUrl = _configuration["DocumentService:BaseUrl"];
+        var baseUrl = ResumeDocumentsUploader.ResolveDocumentsBaseUrl(_configuration);
         if (string.IsNullOrWhiteSpace(baseUrl))
             throw new DocumentServiceException("DocumentService base URL is not configured.", upstreamStatusCode: null, kind: DocumentServiceErrorKind.Configuration);
 
-        var url = $"{baseUrl.TrimEnd('/')}/api/NextHire/{orgId}/documents/{documentId}/analysis";
+        var functionKey = ResumeDocumentsUploader.ResolveDocumentsFunctionKey(_configuration);
+        var url = ResumeDocumentsUploader.BuildDocumentsUri(
+            baseUrl,
+            $"{orgId}/documents/{documentId}/analysis",
+            functionKey);
 
         using var client = _httpClientFactory.CreateClient("DocumentService");
         using var request = new HttpRequestMessage(HttpMethod.Post, url)
         {
             Content = new StringContent("{}", Encoding.UTF8, "application/json")
         };
+        ResumeDocumentsUploader.ApplyDocumentsFunctionAuth(request, functionKey);
+
+        _logger.LogInformation(
+            "Requesting resume analysis from documents function. OrgId={OrgId}, DocumentId={DocumentId}, HasFunctionKey={HasFunctionKey}",
+            orgId,
+            documentId,
+            !string.IsNullOrWhiteSpace(functionKey));
 
         HttpResponseMessage resp;
         try
