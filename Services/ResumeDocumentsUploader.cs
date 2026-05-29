@@ -148,16 +148,27 @@ public class ResumeDocumentsUploader : IResumeDocumentsUploader
         return string.IsNullOrWhiteSpace(key) ? null : key;
     }
 
-    internal static Uri BuildDocumentsUploadUri(string baseUrl, Guid orgId, string? functionKey)
+    internal static Uri BuildDocumentsUploadUri(string baseUrl, Guid orgId, string? functionKey) =>
+        BuildDocumentsUri(baseUrl, $"{orgId}/documents", functionKey);
+
+    internal static Uri BuildDocumentsUri(string baseUrl, string pathAfterNextHire, string? functionKey)
     {
         var trimmed = baseUrl.TrimEnd('/');
         var withApi = trimmed.EndsWith("/api", StringComparison.OrdinalIgnoreCase) ? trimmed : $"{trimmed}/api";
-        var builder = new UriBuilder($"{withApi}/NextHire/{orgId}/documents");
+        var builder = new UriBuilder($"{withApi}/NextHire/{pathAfterNextHire.TrimStart('/')}");
 
         if (!string.IsNullOrWhiteSpace(functionKey))
             builder.Query = $"code={Uri.EscapeDataString(functionKey)}";
 
         return builder.Uri;
+    }
+
+    internal static void ApplyDocumentsFunctionAuth(HttpRequestMessage request, string? functionKey)
+    {
+        if (string.IsNullOrWhiteSpace(functionKey))
+            return;
+
+        request.Headers.TryAddWithoutValidation(FunctionKeyHeaderName, functionKey);
     }
 
     private static string RedactSecrets(string value)
