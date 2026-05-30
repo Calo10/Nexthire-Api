@@ -188,6 +188,19 @@ public class JobRepository : IJobRepository
         return result;
     }
 
+    public async Task<bool> HasApplicationsAsync(Guid orgId, Guid jobId)
+    {
+        const string sql = @"
+            SELECT CASE WHEN EXISTS (
+                SELECT 1
+                FROM applications a
+                WHERE a.org_id = @orgId AND a.job_id = @jobId
+            ) THEN 1 ELSE 0 END;";
+
+        using var connection = _connectionFactory.CreateConnection();
+        return await connection.ExecuteScalarAsync<int>(sql, new { orgId, jobId }) == 1;
+    }
+
     public async Task<bool> DeleteAsync(Guid orgId, Guid id)
     {
         const string sql = @"DELETE FROM jobs WHERE org_id = @orgId AND id = @id;";

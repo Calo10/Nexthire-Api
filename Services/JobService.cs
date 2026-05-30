@@ -42,9 +42,17 @@ public class JobService : IJobService
         return await _repo.UpdateAsync(orgId, id, updateJobDto);
     }
 
-    public async Task<bool> DeleteJobAsync(Guid orgId, Guid id)
+    public async Task<(bool Deleted, bool NotFound, bool HasApplications)> DeleteJobAsync(Guid orgId, Guid id)
     {
-        return await _repo.DeleteAsync(orgId, id);
+        var existing = await _repo.GetByIdAsync(orgId, id);
+        if (existing == null)
+            return (false, true, false);
+
+        if (await _repo.HasApplicationsAsync(orgId, id))
+            return (false, false, true);
+
+        var deleted = await _repo.DeleteAsync(orgId, id);
+        return (deleted, !deleted, false);
     }
 }
 

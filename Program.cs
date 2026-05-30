@@ -347,8 +347,27 @@ app.MapControllers();
 
 await EnsureMarketingMetaCampaignsSchemaAsync(app.Services);
 await EnsureSourcingCampaignsSchemaAsync(app.Services);
+await EnsureWhatsAppTenantMappingsAsync(app.Services);
 
 app.Run();
+
+static async Task EnsureWhatsAppTenantMappingsAsync(IServiceProvider services)
+{
+    using var scope = services.CreateScope();
+    var repo = scope.ServiceProvider.GetRequiredService<IWhatsAppInboundRepository>();
+    var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        await repo.EnsureTenantMappingsSchemaAsync();
+        await repo.SyncTenantMappingsFromConfigAsync(configuration);
+        logger.LogInformation("whatsapp_tenant_mappings table is ready.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to ensure whatsapp_tenant_mappings schema.");
+    }
+}
 
 static async Task EnsureSourcingCampaignsSchemaAsync(IServiceProvider services)
 {

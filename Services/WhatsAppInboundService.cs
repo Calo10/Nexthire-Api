@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Microsoft.Extensions.Configuration;
 using nexthire_api.DTOs;
 using nexthire_api.DTOs.Sourcing;
@@ -47,7 +46,10 @@ public class WhatsAppInboundService : IWhatsAppInboundService
     public async Task ProcessInboundMessageAsync(WhatsAppInboundMessageDto inbound, CancellationToken cancellationToken)
     {
         var rawTenant = inbound.TenantId;
-        inbound.TenantId = WhatsAppTenantResolver.Resolve(_configuration, inbound.TenantId);
+        inbound.TenantId = await _repository.ResolveInboundTenantAsync(
+            rawTenant,
+            _configuration,
+            cancellationToken);
         if (!string.Equals(rawTenant, inbound.TenantId, StringComparison.Ordinal))
         {
             _logger.LogInformation(
@@ -81,7 +83,7 @@ public class WhatsAppInboundService : IWhatsAppInboundService
             inbound.TenantId,
             context.ContactPhone);
 
-        var botConfig = await _repository.GetBotConfigAsync(inbound.TenantId);
+        var botConfig = await _repository.GetBotConfigAsync(inbound.TenantId, rawTenant);
         if (botConfig == null || !botConfig.IsEnabled)
         {
             _logger.LogWarning(
@@ -449,33 +451,32 @@ public class WhatsAppInboundService : IWhatsAppInboundService
         Guid jobPostId,
         CancellationToken cancellationToken)
     {
-        if (!Guid.TryParse(inbound.TenantId.Trim(), out var orgId))
+        var jobOrgId = await _pipeline.GetJobOrgIdAsync(jobPostId);
+        _logger.LogInformation(
+            "[WhatsAppBot] Start flow: TenantId={TenantId} JobPostId={JobPostId} JobOrgId={JobOrgId}",
+            inbound.TenantId,
+            jobPostId,
+            jobOrgId);
+        if (!jobOrgId.HasValue)
         {
             _logger.LogWarning(
-                "WhatsApp tenantId is not a GUID; cannot start job application flow. TenantId: {TenantId}",
+                "[WhatsAppBot] Job not found in database. JobPostId={JobPostId} TenantId={TenantId}",
+                jobPostId,
                 inbound.TenantId);
-            await SendAndPersistBotReplyAsync(
-                inbound,
-                context,
-                "No pudimos iniciar tu postulación en este momento. Si el problema continúa, pide hablar con un reclutador.",
-                cancellationToken);
-            return true;
-        }
-
-        var jobOk = await _pipeline.JobExistsInOrgAsync(orgId, jobPostId);
-        _logger.LogInformation(
-            "[WhatsAppBot] Start flow: OrgId={OrgId} JobPostId={JobPostId} JobExistsInOrg={JobOk}",
-            orgId,
-            jobPostId,
-            jobOk);
-        if (!jobOk)
-        {
             await SendAndPersistBotReplyAsync(
                 inbound,
                 context,
                 "No encontramos esa vacante. Verifica el enlace del aviso e inténtalo de nuevo.",
                 cancellationToken);
             return true;
+        }
+
+        if (Guid.TryParse(inbound.TenantId.Trim(), out var tenantOrgId) && jobOrgId.Value != tenantOrgId)
+        {
+            _logger.LogWarning(
+                "[WhatsAppBot] Job org {JobOrgId} differs from resolved tenant org {TenantOrgId}; apply flow continues using job org.",
+                jobOrgId.Value,
+                tenantOrgId);
         }
 
         var session = new WhatsAppApplySessionState { Step = WhatsAppApplySessionSteps.Name };
@@ -508,18 +509,32 @@ public class WhatsAppInboundService : IWhatsAppInboundService
         WhatsAppApplySessionState session,
         CancellationToken cancellationToken)
     {
-        if (!Guid.TryParse(inbound.TenantId.Trim(), out var orgId))
+        if (!Guid.TryParse(inbound.TenantId.Trim(), out var tenantOrgId))
+            tenantOrgId = Guid.Empty;
+
+        var jobOrgId = await _pipeline.GetJobOrgIdAsync(jobPostId);
+        if (!jobOrgId.HasValue)
             return false;
+
+        var orgId = jobOrgId.Value;
+        if (tenantOrgId != Guid.Empty && orgId != tenantOrgId)
+        {
+            _logger.LogWarning(
+                "[WhatsAppBot] Apply step {Step}: using job org {JobOrgId} (tenant org {TenantOrgId}).",
+                session.Step,
+                orgId,
+                tenantOrgId);
+        }
 
         if (string.Equals(session.Step, WhatsAppApplySessionSteps.Name, StringComparison.OrdinalIgnoreCase))
         {
             var name = inbound.Body?.Trim() ?? string.Empty;
-            if (name.Length < 2)
+            if (!WhatsAppApplyResponseValidator.TryValidateName(name, out var nameError))
             {
                 await SendAndPersistBotReplyAsync(
                     inbound,
                     context,
-                    "Por favor escribe tu nombre completo (al menos 2 caracteres).",
+                    nameError!,
                     cancellationToken);
                 return true;
             }
@@ -539,17 +554,17 @@ public class WhatsAppInboundService : IWhatsAppInboundService
         if (string.Equals(session.Step, WhatsAppApplySessionSteps.English, StringComparison.OrdinalIgnoreCase))
         {
             var level = inbound.Body?.Trim() ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(level))
+            if (!WhatsAppApplyResponseValidator.TryValidateEnglishLevel(level, out var normalizedLevel, out var levelError))
             {
                 await SendAndPersistBotReplyAsync(
                     inbound,
                     context,
-                    "Indica tu nivel de inglés en una breve frase.",
+                    levelError!,
                     cancellationToken);
                 return true;
             }
 
-            session.EnglishLevel = level;
+            session.EnglishLevel = normalizedLevel;
             session.Step = WhatsAppApplySessionSteps.Experience;
             await PersistApplySessionAsync(context, inbound.TenantId, jobPostId, session, cancellationToken);
 
@@ -563,12 +578,12 @@ public class WhatsAppInboundService : IWhatsAppInboundService
 
         if (string.Equals(session.Step, WhatsAppApplySessionSteps.Experience, StringComparison.OrdinalIgnoreCase))
         {
-            if (!TryParseExperienceYears(inbound.Body, out var years))
+            if (!WhatsAppApplyResponseValidator.TryParseExperienceYears(inbound.Body, out var years, out var experienceError))
             {
                 await SendAndPersistBotReplyAsync(
                     inbound,
                     context,
-                    "Indica tus años de experiencia con un número (ejemplo: 5).",
+                    experienceError!,
                     cancellationToken);
                 return true;
             }
@@ -701,22 +716,6 @@ public class WhatsAppInboundService : IWhatsAppInboundService
 
     private static string SerializeApplySession(WhatsAppApplySessionState session) =>
         JsonSerializer.Serialize(session, ApplySessionJsonOptions);
-
-    private static bool TryParseExperienceYears(string? text, out int years)
-    {
-        years = 0;
-        if (string.IsNullOrWhiteSpace(text))
-            return false;
-
-        var m = Regex.Match(text.Trim(), @"\d+");
-        if (!m.Success)
-            return false;
-
-        if (!int.TryParse(m.Value, out years))
-            return false;
-
-        return years is >= 0 and <= 60;
-    }
 
     private static string RepeatApplyStepPrompt(string step) =>
         step switch

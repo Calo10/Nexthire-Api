@@ -86,5 +86,12 @@ public class PipelineRepository : IPipelineRepository
         using var connection = _connectionFactory.CreateConnection();
         return await connection.ExecuteScalarAsync<int>(sql, new { orgId, jobId }) == 1;
     }
+
+    public async Task<Guid?> GetJobOrgIdAsync(Guid jobId)
+    {
+        const string sql = @"SELECT org_id FROM jobs WHERE id = @jobId;";
+        using var connection = _connectionFactory.CreateConnection();
+        return await connection.ExecuteScalarAsync<Guid?>(sql, new { jobId });
+    }
 }
 

@@ -9,5 +9,6 @@ public interface IPipelineRepository
     Task<Guid?> GetFirstStageIdAsync(Guid orgId);
     Task<bool> StageExistsInOrgAsync(Guid orgId, Guid stageId);
     Task<bool> JobExistsInOrgAsync(Guid orgId, Guid jobId);
+    Task<Guid?> GetJobOrgIdAsync(Guid jobId);
 }
 

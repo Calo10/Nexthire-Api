@@ -10,6 +10,6 @@ public interface IJobService
     Task<JobDto?> GetPublicOpenJobByIdAsync(Guid orgId, Guid id);
     Task<JobDto> CreateJobAsync(Guid orgId, Guid createdByUserId, CreateJobDto createJobDto);
     Task<JobDto?> UpdateJobAsync(Guid orgId, Guid id, UpdateJobDto updateJobDto);
-    Task<bool> DeleteJobAsync(Guid orgId, Guid id);
+    Task<(bool Deleted, bool NotFound, bool HasApplications)> DeleteJobAsync(Guid orgId, Guid id);
 }
 

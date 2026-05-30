@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using nexthire_api.DTOs;
 
 namespace nexthire_api.Repositories;
@@ -9,7 +10,15 @@ public interface IWhatsAppInboundRepository
         string normalizedPhoneNumber,
         CancellationToken cancellationToken);
 
-    Task<WhatsAppBotConfigDto?> GetBotConfigAsync(string tenantId);
+    Task<WhatsAppBotConfigDto?> GetBotConfigAsync(string tenantId, string? alternateTenantId = null);
+
+    Task EnsureTenantMappingsSchemaAsync(CancellationToken cancellationToken = default);
+
+    Task SyncTenantMappingsFromConfigAsync(IConfiguration configuration, CancellationToken cancellationToken = default);
+
+    Task<Guid?> LookupOrgIdByMessengerTenantAsync(string messengerTenant, CancellationToken cancellationToken = default);
+
+    Task<string> ResolveInboundTenantAsync(string rawTenantId, IConfiguration configuration, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<WhatsAppMessageHistoryItemDto>> GetRecentMessagesAsync(Guid conversationId, int maxMessages);
 
