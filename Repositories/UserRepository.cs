@@ -30,6 +30,30 @@ public class UserRepository : IUserRepository
             )
             BEGIN
                 ALTER TABLE dbo.nh_users ALTER COLUMN nexa_user_id uniqueidentifier NULL;
+            END;
+
+            -- Allow multiple pending invites (nexa_user_id NULL). SQL Server unique indexes permit only one NULL.
+            IF EXISTS (
+                SELECT 1
+                FROM sys.indexes
+                WHERE name = 'UX_nh_users_nexa_user_id'
+                  AND object_id = OBJECT_ID('dbo.nh_users')
+                  AND has_filter = 0
+            )
+            BEGIN
+                DROP INDEX UX_nh_users_nexa_user_id ON dbo.nh_users;
+            END;
+
+            IF NOT EXISTS (
+                SELECT 1
+                FROM sys.indexes
+                WHERE name = 'UX_nh_users_nexa_user_id'
+                  AND object_id = OBJECT_ID('dbo.nh_users')
+            )
+            BEGIN
+                CREATE UNIQUE NONCLUSTERED INDEX UX_nh_users_nexa_user_id
+                    ON dbo.nh_users (nexa_user_id)
+                    WHERE nexa_user_id IS NOT NULL;
             END";
 
         using var connection = _connectionFactory.CreateConnection();
