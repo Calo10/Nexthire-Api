@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using nexthire_api.DTOs;
 
 namespace nexthire_api.Helpers;
 
@@ -28,38 +29,143 @@ public static partial class WhatsAppApplyResponseValidator
         return QuestionPhraseRegex().IsMatch(normalized);
     }
 
-    public static bool TryValidateName(string? text, out string? errorMessage)
+    public static bool TryValidateName(string? text, string language, out string? errorMessage)
     {
         errorMessage = null;
         var name = text?.Trim() ?? string.Empty;
 
         if (name.Length < 2)
         {
-            errorMessage = "Por favor escribe tu nombre completo (al menos 2 caracteres).";
+            errorMessage = WhatsAppBotMessages.FullNameInvalid(language);
             return false;
         }
 
         if (LooksLikeQuestion(name))
         {
-            errorMessage =
-                "Lo usamos para identificarte en el proceso y que el reclutador sepa cómo dirigirse a ti. ¿Cuál es tu nombre completo?";
+            errorMessage = WhatsAppBotMessages.FullNameQuestion(language);
             return false;
         }
 
         if (!ContainsAtLeastTwoLetters(name))
         {
-            errorMessage = "Escribe tu nombre completo usando letras (por ejemplo: Ana García).";
+            errorMessage = WhatsAppBotMessages.FullNameLettersExample(language);
             return false;
         }
 
         if (QuestionPhraseRegex().IsMatch(NormalizeForMatch(name)))
         {
-            errorMessage =
-                "No parece un nombre. Escríbelo completo (por ejemplo: Ana García).";
+            errorMessage = WhatsAppBotMessages.FullNameDoesNotLookValid(language);
             return false;
         }
 
         return true;
+    }
+
+    public static bool TryValidateFixedField(
+        string fieldKey,
+        string? text,
+        string language,
+        out string? normalizedValue,
+        out string? errorMessage)
+    {
+        normalizedValue = null;
+        errorMessage = null;
+
+        return fieldKey switch
+        {
+            WhatsAppApplyFixedFieldKeys.FirstName => TryValidatePersonName(
+                text,
+                WhatsAppBotMessages.FieldLabelFirstName(language),
+                language,
+                out normalizedValue,
+                out errorMessage),
+            WhatsAppApplyFixedFieldKeys.LastName => TryValidatePersonName(
+                text,
+                WhatsAppBotMessages.FieldLabelLastName(language),
+                language,
+                out normalizedValue,
+                out errorMessage),
+            WhatsAppApplyFixedFieldKeys.Email => TryValidateEmailField(text, language, out normalizedValue, out errorMessage),
+            _ => Fail(WhatsAppBotMessages.UnsupportedAnswerType(language, fieldKey), out normalizedValue, out errorMessage)
+        };
+    }
+
+    private static bool TryValidatePersonName(
+        string? text,
+        string fieldLabel,
+        string language,
+        out string? normalizedValue,
+        out string? errorMessage)
+    {
+        var value = text?.Trim() ?? string.Empty;
+        if (value.Length < 2)
+        {
+            errorMessage = WhatsAppBotMessages.PersonNameTooShort(language, fieldLabel);
+            normalizedValue = null;
+            return false;
+        }
+
+        if (LooksLikeQuestion(value))
+        {
+            errorMessage = WhatsAppBotMessages.PersonNameQuestion(language, fieldLabel);
+            normalizedValue = null;
+            return false;
+        }
+
+        if (!ContainsAtLeastTwoLetters(value))
+        {
+            errorMessage = WhatsAppBotMessages.PersonNameLettersOnly(language, fieldLabel);
+            normalizedValue = null;
+            return false;
+        }
+
+        return Assign(value, out normalizedValue, out errorMessage);
+    }
+
+    private static bool TryValidateFullNameField(
+        string? text,
+        string language,
+        out string? normalizedValue,
+        out string? errorMessage)
+    {
+        if (!TryValidateName(text, language, out errorMessage))
+        {
+            normalizedValue = null;
+            return false;
+        }
+
+        return Assign(text!.Trim(), out normalizedValue, out errorMessage);
+    }
+
+    private static bool TryValidateEmailField(
+        string? text,
+        string language,
+        out string? normalizedValue,
+        out string? errorMessage)
+    {
+        var value = text?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            errorMessage = WhatsAppBotMessages.EmailRequired(language);
+            normalizedValue = null;
+            return false;
+        }
+
+        if (LooksLikeQuestion(value))
+        {
+            errorMessage = WhatsAppBotMessages.EmailQuestion(language);
+            normalizedValue = null;
+            return false;
+        }
+
+        if (!EmailRegex().IsMatch(value))
+        {
+            errorMessage = WhatsAppBotMessages.EmailInvalid(language);
+            normalizedValue = null;
+            return false;
+        }
+
+        return Assign(value.ToLowerInvariant(), out normalizedValue, out errorMessage);
     }
 
     public static bool TryValidateEnglishLevel(string? text, out string? normalizedLevel, out string? errorMessage)
@@ -135,6 +241,137 @@ public static partial class WhatsAppApplyResponseValidator
         return true;
     }
 
+    public static bool TryValidateAnswer(
+        JobBotQuestionDto question,
+        WhatsAppInboundMessageDto inbound,
+        string language,
+        out string? normalizedValue,
+        out string? errorMessage)
+    {
+        normalizedValue = null;
+        errorMessage = null;
+
+        return question.AnswerType switch
+        {
+            JobBotQuestionAnswerTypes.Text => TryValidateTextAnswer(question, inbound.Body, language, out normalizedValue, out errorMessage),
+            JobBotQuestionAnswerTypes.Number => TryValidateNumberAnswer(question, inbound.Body, language, out normalizedValue, out errorMessage),
+            JobBotQuestionAnswerTypes.YesNo => TryValidateYesNoAnswer(question, inbound.Body, language, out normalizedValue, out errorMessage),
+            JobBotQuestionAnswerTypes.File => TryValidateFileAnswer(question, inbound, language, out normalizedValue, out errorMessage),
+            _ => Fail(WhatsAppBotMessages.UnsupportedAnswerType(language, question.QuestionKey), out normalizedValue, out errorMessage)
+        };
+    }
+
+    private static bool TryValidateTextAnswer(
+        JobBotQuestionDto question,
+        string? text,
+        string language,
+        out string? normalizedValue,
+        out string? errorMessage)
+    {
+        if (IsFullNameQuestion(question.QuestionKey))
+            return TryValidateName(text, language, out errorMessage)
+                ? Assign(text?.Trim(), out normalizedValue, out errorMessage)
+                : Fail(errorMessage!, out normalizedValue, out errorMessage);
+
+        var value = text?.Trim() ?? string.Empty;
+        if (value.Length < 1)
+            return Fail(WhatsAppBotMessages.TextAnswerRequired(language), out normalizedValue, out errorMessage);
+
+        if (LooksLikeQuestion(value))
+            return Fail(
+                WhatsAppBotMessages.TextAnswerQuestion(language, question.QuestionText),
+                out normalizedValue,
+                out errorMessage);
+
+        return Assign(value, out normalizedValue, out errorMessage);
+    }
+
+    private static bool TryValidateNumberAnswer(
+        JobBotQuestionDto question,
+        string? text,
+        string language,
+        out string? normalizedValue,
+        out string? errorMessage)
+    {
+        if (!TryParseExperienceYears(text, out var years, out var parseError))
+        {
+            errorMessage = LooksLikeQuestion(text)
+                ? WhatsAppBotMessages.NumberQuestion(language, question.QuestionText)
+                : parseError ?? WhatsAppBotMessages.NumberInvalid(language);
+            normalizedValue = null;
+            return false;
+        }
+
+        return Assign(years.ToString(CultureInfo.InvariantCulture), out normalizedValue, out errorMessage);
+    }
+
+    private static bool TryValidateYesNoAnswer(
+        JobBotQuestionDto question,
+        string? text,
+        string language,
+        out string? normalizedValue,
+        out string? errorMessage)
+    {
+        var value = text?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(value))
+            return Fail(WhatsAppBotMessages.YesNoRequired(language), out normalizedValue, out errorMessage);
+
+        if (LooksLikeQuestion(value))
+            return Fail(
+                WhatsAppBotMessages.TextAnswerQuestion(language, question.QuestionText),
+                out normalizedValue,
+                out errorMessage);
+
+        var normalized = NormalizeForMatch(value);
+        if (YesRegex().IsMatch(normalized))
+            return Assign("yes", out normalizedValue, out errorMessage);
+
+        if (NoRegex().IsMatch(normalized))
+            return Assign("no", out normalizedValue, out errorMessage);
+
+        return Fail(WhatsAppBotMessages.YesNoRequired(language), out normalizedValue, out errorMessage);
+    }
+
+    private static bool TryValidateFileAnswer(
+        JobBotQuestionDto question,
+        WhatsAppInboundMessageDto inbound,
+        string language,
+        out string? normalizedValue,
+        out string? errorMessage)
+    {
+        var url = WhatsAppDynamicApplyHelper.TryGetFileAnswerUrl(inbound);
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            errorMessage = LooksLikeQuestion(inbound.Body)
+                ? WhatsAppBotMessages.FileQuestion(language, question.QuestionText)
+                : WhatsAppBotMessages.FileRequired(language);
+            normalizedValue = null;
+            return false;
+        }
+
+        return Assign(url, out normalizedValue, out errorMessage);
+    }
+
+    private static bool IsFullNameQuestion(string questionKey) =>
+        questionKey.Equals("full_name", StringComparison.OrdinalIgnoreCase)
+        || questionKey.Equals("nombre", StringComparison.OrdinalIgnoreCase)
+        || questionKey.Equals("nombre_completo", StringComparison.OrdinalIgnoreCase)
+        || questionKey.Equals("name", StringComparison.OrdinalIgnoreCase);
+
+    private static bool Assign(string? value, out string? normalizedValue, out string? errorMessage)
+    {
+        normalizedValue = value;
+        errorMessage = null;
+        return true;
+    }
+
+    private static bool Fail(string message, out string? normalizedValue, out string? errorMessage)
+    {
+        normalizedValue = null;
+        errorMessage = message;
+        return false;
+    }
+
     private static bool ContainsAtLeastTwoLetters(string value) =>
         value.Count(char.IsLetter) >= 2;
 
@@ -150,4 +387,15 @@ public static partial class WhatsAppApplyResponseValidator
         @"^\s*(\d{1,2})\s*(años|anos|years|year|a)?\s*[.!?]?\s*$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ExperienceYearsRegex();
+
+    [GeneratedRegex(@"^(si|sí|yes|y|s)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex YesRegex();
+
+    [GeneratedRegex(@"^(no|n)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex NoRegex();
+
+    [GeneratedRegex(
+        @"^[^\s@]+@[^\s@]+\.[^\s@]+$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex EmailRegex();
 }

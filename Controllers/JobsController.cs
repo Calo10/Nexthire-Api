@@ -89,6 +89,10 @@ public class JobsController : ControllerBase
             var job = await _jobService.CreateJobAsync(orgId, userId, createJobDto);
             return CreatedAtAction(nameof(GetJob), new { id = job.Id }, job);
         }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error creating job");
@@ -118,6 +122,10 @@ public class JobsController : ControllerBase
                 return NotFound($"Job with ID {id} not found");
             }
             return Ok(job);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
         }
         catch (Exception ex)
         {

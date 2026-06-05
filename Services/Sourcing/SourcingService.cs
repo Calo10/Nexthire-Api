@@ -169,6 +169,7 @@ public class SourcingService : ISourcingService
             WillingToRelocate = u.WillingToRelocate ?? ex.WillingToRelocate,
             FitScore = u.FitScore ?? ex.FitScore,
             QualificationNotes = u.QualificationNotes ?? ex.QualificationNotes,
+            DynamicAnswersJson = u.DynamicAnswersJson ?? ex.DynamicAnswersJson,
             RawPayloadJson = u.RawPayloadJson ?? ex.RawPayloadJson
         };
     }
@@ -294,13 +295,6 @@ public class SourcingService : ISourcingService
             ? lead.ResumeUrl.Trim()
             : ExtractResumeDocumentIdFromRawPayload(lead.RawPayloadJson);
 
-        CandidateDto? candidate = null;
-        if (!string.IsNullOrEmpty(emailNorm))
-            candidate = await _candidates.GetByEmailAsync(orgId, emailNorm);
-        if (candidate == null && !string.IsNullOrEmpty(phoneDigits))
-            candidate = await _candidates.GetByPhoneDigitsAsync(orgId, phoneDigits);
-
-        var candidateCreated = false;
         Guid candidateId;
         Guid? applicationId = null;
         var applicationCreated = false;
@@ -310,34 +304,23 @@ public class SourcingService : ISourcingService
         using var tx = conn.BeginTransaction();
         try
         {
-            if (candidate == null)
+            // Always create a new candidate from the lead. WhatsApp leads share the sender phone
+            // number, so matching by phone (or email) would incorrectly reuse unrelated candidates.
+            var createDto = BuildCreateCandidateFromLead(lead, emailNorm, phoneDigits, resumeDocumentId);
+            var emailLower = SourcingValidation.NormalizeEmail(createDto.Email);
+            if (await _candidates.ExistsByEmailAsync(orgId, emailLower))
             {
-                var createDto = BuildCreateCandidateFromLead(lead, emailNorm, phoneDigits, resumeDocumentId);
-                var emailLower = SourcingValidation.NormalizeEmail(createDto.Email);
-                candidate = await _candidates.InsertAsync(orgId, createDto, emailLower, tx);
-                candidateCreated = true;
-            }
-            else if (!string.IsNullOrWhiteSpace(resumeDocumentId))
-            {
-                var updatedCandidate = await _candidates.UpdateAsync(
-                    orgId,
-                    candidate.Id,
-                    new UpdateCandidateRequestDto
-                    {
-                        FirstName = string.IsNullOrWhiteSpace(candidate.FirstName) ? "Unknown" : candidate.FirstName,
-                        LastName = candidate.LastName ?? string.Empty,
-                        Email = candidate.Email,
-                        Phone = candidate.Phone,
-                        Source = candidate.Source,
-                        ResumeUrl = resumeDocumentId
-                    },
-                    candidate.Email.ToLowerInvariant());
-
-                if (updatedCandidate != null)
-                    candidate = updatedCandidate;
+                _logger.LogWarning(
+                    "Convert lead {LeadId}: email {Email} already exists; using lead-specific placeholder email for new candidate.",
+                    leadId,
+                    emailLower);
+                emailLower = $"lead-{leadId:N}@sourcing.placeholder.invalid";
+                createDto.Email = emailLower;
             }
 
+            var candidate = await _candidates.InsertAsync(orgId, createDto, emailLower, tx);
             candidateId = candidate.Id;
+            var candidateCreated = true;
 
             if (lead.JobId.HasValue)
             {

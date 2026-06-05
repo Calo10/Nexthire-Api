@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using nexthire_api.DTOs;
+using nexthire_api.Helpers;
 using nexthire_api.Services;
 
 namespace nexthire_api.Controllers;
@@ -33,8 +34,12 @@ public class WhatsAppIntegrationController : ControllerBase
             return BadRequest(new { message = "providerMessageId is required." });
         if (string.IsNullOrWhiteSpace(request.From))
             return BadRequest(new { message = "from is required." });
-        if (string.IsNullOrWhiteSpace(request.Body))
-            return BadRequest(new { message = "body is required." });
+
+        WhatsAppInboundMediaHelper.EnsureMediaPopulated(request);
+        if (string.IsNullOrWhiteSpace(request.Body) && !WhatsAppInboundMediaHelper.HasInboundMedia(request))
+            return BadRequest(new { message = "body or media is required." });
+
+        request.Body ??= string.Empty;
 
         var bodyPreview = request.Body.Length <= 160
             ? request.Body

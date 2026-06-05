@@ -57,6 +57,9 @@ public interface ISourcingRepository
 
     Task EnsureCampaignsSchemaAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>Inserts default rows in <c>sourcing_source_types</c> (e.g. public_apply) when missing.</summary>
+    Task EnsureDefaultSourceTypesAsync(CancellationToken cancellationToken = default);
+
     Task<SourcingCampaignDetailDto> CreateCampaignAsync(Guid orgId, CreateSourcingCampaignRequestDto dto);
 
     /// <summary>Inserts or updates a Meta-linked row in <c>sourcing_campaigns</c> using a fixed id (matches <c>marketing_meta_campaigns</c>).</summary>

@@ -134,7 +134,6 @@ public class SourcingRepository : ISourcingRepository
               AND (@campaignId IS NULL OR sl.campaign_id = @campaignId)
               AND (@sourceTypeCode IS NULL OR sl.source_type_code = @sourceTypeCode)
               AND (@status IS NULL OR sl.status = @status)
-              AND (@availability IS NULL OR sl.availability = @availability)
               AND (@minFitScore IS NULL OR (sl.fit_score IS NOT NULL AND sl.fit_score >= @minFitScore))
               AND (
                     @search IS NULL
@@ -157,7 +156,6 @@ public class SourcingRepository : ISourcingRepository
                 sl.phone AS Phone,
                 sl.resume_url AS ResumeUrl,
                 sl.status AS Status,
-                sl.availability AS Availability,
                 sl.fit_score AS FitScore,
                 sl.created_at AS CreatedAt,
                 sl.updated_at AS UpdatedAt
@@ -167,7 +165,6 @@ public class SourcingRepository : ISourcingRepository
               AND (@campaignId IS NULL OR sl.campaign_id = @campaignId)
               AND (@sourceTypeCode IS NULL OR sl.source_type_code = @sourceTypeCode)
               AND (@status IS NULL OR sl.status = @status)
-              AND (@availability IS NULL OR sl.availability = @availability)
               AND (@minFitScore IS NULL OR (sl.fit_score IS NOT NULL AND sl.fit_score >= @minFitScore))
               AND (
                     @search IS NULL
@@ -247,24 +244,11 @@ public class SourcingRepository : ISourcingRepository
                 sl.phone AS Phone,
                 sl.resume_url AS ResumeUrl,
                 sl.status AS Status,
-                sl.availability AS Availability,
                 sl.fit_score AS FitScore,
                 sl.created_at AS CreatedAt,
                 sl.updated_at AS UpdatedAt,
-                sl.desired_role AS DesiredRole,
-                sl.current_role AS CurrentRole,
-                sl.city AS City,
-                sl.state AS State,
-                sl.zip_code AS ZipCode,
-                sl.country AS Country,
-                sl.latitude AS Latitude,
-                sl.longitude AS Longitude,
-                sl.experience_years AS ExperienceYears,
-                sl.english_level AS EnglishLevel,
-                sl.spanish_level AS SpanishLevel,
-                sl.has_transportation AS HasTransportation,
-                sl.willing_to_relocate AS WillingToRelocate,
                 sl.qualification_notes AS QualificationNotes,
+                sl.dynamic_answers_json AS DynamicAnswersJson,
                 sl.raw_payload_json AS RawPayloadJson,
                 sl.contacted_at AS ContactedAt,
                 sl.converted_candidate_id AS ConvertedCandidateId,
@@ -300,24 +284,11 @@ public class SourcingRepository : ISourcingRepository
         public string? Phone { get; set; }
         public string? ResumeUrl { get; set; }
         public string Status { get; set; } = string.Empty;
-        public string? Availability { get; set; }
         public decimal? FitScore { get; set; }
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset UpdatedAt { get; set; }
-        public string? DesiredRole { get; set; }
-        public string? CurrentRole { get; set; }
-        public string? City { get; set; }
-        public string? State { get; set; }
-        public string? ZipCode { get; set; }
-        public string? Country { get; set; }
-        public decimal? Latitude { get; set; }
-        public decimal? Longitude { get; set; }
-        public int? ExperienceYears { get; set; }
-        public string? EnglishLevel { get; set; }
-        public string? SpanishLevel { get; set; }
-        public bool? HasTransportation { get; set; }
-        public bool? WillingToRelocate { get; set; }
         public string? QualificationNotes { get; set; }
+        public string? DynamicAnswersJson { get; set; }
         public string? RawPayloadJson { get; set; }
         public DateTimeOffset? ContactedAt { get; set; }
         public Guid? ConvertedCandidateId { get; set; }
@@ -346,24 +317,11 @@ public class SourcingRepository : ISourcingRepository
             Phone = r.Phone,
             ResumeUrl = r.ResumeUrl,
             Status = r.Status,
-            Availability = r.Availability,
             FitScore = r.FitScore,
             CreatedAt = r.CreatedAt,
             UpdatedAt = r.UpdatedAt,
-            DesiredRole = r.DesiredRole,
-            CurrentRole = r.CurrentRole,
-            City = r.City,
-            State = r.State,
-            ZipCode = r.ZipCode,
-            Country = r.Country,
-            Latitude = r.Latitude,
-            Longitude = r.Longitude,
-            ExperienceYears = r.ExperienceYears,
-            EnglishLevel = r.EnglishLevel,
-            SpanishLevel = r.SpanishLevel,
-            HasTransportation = r.HasTransportation,
-            WillingToRelocate = r.WillingToRelocate,
             QualificationNotes = r.QualificationNotes,
+            DynamicAnswersJson = r.DynamicAnswersJson,
             RawPayloadJson = r.RawPayloadJson,
             ContactedAt = r.ContactedAt,
             ConvertedCandidateId = r.ConvertedCandidateId,
@@ -394,20 +352,14 @@ public class SourcingRepository : ISourcingRepository
             INSERT INTO sourcing_leads (
                 id, org_id, campaign_id, job_id, source_type_code,
                 first_name, last_name, full_name, email, phone,
-                resume_url,
-                desired_role, current_role, city, state, zip_code, country,
-                latitude, longitude, availability, experience_years,
-                english_level, spanish_level, has_transportation, willing_to_relocate,
+                resume_url, dynamic_answers_json,
                 fit_score, qualification_notes, raw_payload_json,
                 status, created_at, updated_at
             )
             VALUES (
                 @id, @orgId, @campaignId, @jobId, @sourceTypeCode,
                 @firstName, @lastName, @fullName, @email, @phone,
-                @resumeUrl,
-                @desiredRole, @currentRole, @city, @state, @zipCode, @country,
-                @latitude, @longitude, @availability, @experienceYears,
-                @englishLevel, @spanishLevel, @hasTransportation, @willingToRelocate,
+                @resumeUrl, @dynamicAnswersJson,
                 @fitScore, @qualificationNotes, @rawPayloadJson,
                 @status, SYSUTCDATETIME(), SYSUTCDATETIME()
             );";
@@ -426,20 +378,7 @@ public class SourcingRepository : ISourcingRepository
             dto.Email,
             dto.Phone,
             dto.ResumeUrl,
-            dto.DesiredRole,
-            dto.CurrentRole,
-            dto.City,
-            dto.State,
-            dto.ZipCode,
-            dto.Country,
-            dto.Latitude,
-            dto.Longitude,
-            dto.Availability,
-            dto.ExperienceYears,
-            dto.EnglishLevel,
-            dto.SpanishLevel,
-            dto.HasTransportation,
-            dto.WillingToRelocate,
+            dto.DynamicAnswersJson,
             dto.FitScore,
             dto.QualificationNotes,
             dto.RawPayloadJson,
@@ -466,20 +405,7 @@ public class SourcingRepository : ISourcingRepository
                 email = @email,
                 phone = @phone,
                 resume_url = @resumeUrl,
-                desired_role = @desiredRole,
-                current_role = @currentRole,
-                city = @city,
-                state = @state,
-                zip_code = @zipCode,
-                country = @country,
-                latitude = @latitude,
-                longitude = @longitude,
-                availability = @availability,
-                experience_years = @experienceYears,
-                english_level = @englishLevel,
-                spanish_level = @spanishLevel,
-                has_transportation = @hasTransportation,
-                willing_to_relocate = @willingToRelocate,
+                dynamic_answers_json = @dynamicAnswersJson,
                 fit_score = @fitScore,
                 qualification_notes = @qualificationNotes,
                 raw_payload_json = @rawPayloadJson,
@@ -500,20 +426,7 @@ public class SourcingRepository : ISourcingRepository
             dto.Email,
             dto.Phone,
             dto.ResumeUrl,
-            dto.DesiredRole,
-            dto.CurrentRole,
-            dto.City,
-            dto.State,
-            dto.ZipCode,
-            dto.Country,
-            dto.Latitude,
-            dto.Longitude,
-            dto.Availability,
-            dto.ExperienceYears,
-            dto.EnglishLevel,
-            dto.SpanishLevel,
-            dto.HasTransportation,
-            dto.WillingToRelocate,
+            dto.DynamicAnswersJson,
             dto.FitScore,
             dto.QualificationNotes,
             dto.RawPayloadJson
@@ -761,6 +674,105 @@ END";
 
         using var connection = _connectionFactory.CreateConnection();
         await connection.ExecuteAsync(new CommandDefinition(sql, cancellationToken: cancellationToken));
+    }
+
+    public async Task EnsureDefaultSourceTypesAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _connectionFactory.CreateConnection();
+        var cols = await GetSourceTypeColumnSetAsync(connection);
+        if (!cols.Contains("code"))
+            return;
+
+        var seeds = new (string Code, string Name, string? Description)[]
+        {
+            ("public_apply", "Public apply", "Applications from the public careers page"),
+            ("whatsapp", "WhatsApp", "Applications via WhatsApp bot"),
+            ("meta_ads", "Meta Ads", "Applications from Meta advertising"),
+        };
+
+        foreach (var (code, name, description) in seeds)
+            await InsertSourceTypeIfMissingAsync(connection, cols, code, name, description, cancellationToken);
+    }
+
+    private async Task InsertSourceTypeIfMissingAsync(
+        IDbConnection connection,
+        HashSet<string> cols,
+        string code,
+        string name,
+        string? description,
+        CancellationToken cancellationToken)
+    {
+        var exists = await connection.ExecuteScalarAsync<int>(
+            new CommandDefinition(
+                "SELECT COUNT(1) FROM dbo.sourcing_source_types WHERE code = @code",
+                new { code },
+                cancellationToken: cancellationToken));
+        if (exists > 0)
+            return;
+
+        var insertCols = new List<string> { "code" };
+        var insertVals = new List<string> { "@code" };
+        var param = new DynamicParameters();
+        param.Add("code", code);
+
+        if (cols.Contains("id"))
+        {
+            insertCols.Add("id");
+            insertVals.Add("@id");
+            param.Add("id", Guid.NewGuid());
+        }
+
+        if (cols.Contains("name"))
+        {
+            insertCols.Add("name");
+            insertVals.Add("@name");
+            param.Add("name", name);
+        }
+
+        if (cols.Contains("display_name"))
+        {
+            insertCols.Add("display_name");
+            insertVals.Add("@displayName");
+            param.Add("displayName", name);
+        }
+
+        if (cols.Contains("description") && !string.IsNullOrWhiteSpace(description))
+        {
+            insertCols.Add("description");
+            insertVals.Add("@description");
+            param.Add("description", description);
+        }
+
+        if (cols.Contains("is_active"))
+        {
+            insertCols.Add("is_active");
+            insertVals.Add("@isActive");
+            param.Add("isActive", true);
+        }
+
+        if (cols.Contains("sort_order"))
+        {
+            insertCols.Add("sort_order");
+            insertVals.Add("@sortOrder");
+            param.Add("sortOrder", 0);
+        }
+
+        if (cols.Contains("created_at"))
+        {
+            insertCols.Add("created_at");
+            insertVals.Add("SYSUTCDATETIME()");
+        }
+
+        if (cols.Contains("updated_at"))
+        {
+            insertCols.Add("updated_at");
+            insertVals.Add("SYSUTCDATETIME()");
+        }
+
+        var sql =
+            $"INSERT INTO dbo.sourcing_source_types ({string.Join(", ", insertCols)}) VALUES ({string.Join(", ", insertVals)})";
+        await connection.ExecuteAsync(new CommandDefinition(sql, param, cancellationToken: cancellationToken));
+        _logger.LogInformation("Seeded sourcing_source_types code={Code}", code);
     }
 
     public async Task<SourcingCampaignDetailDto> UpsertMetaAdsCampaignAsync(

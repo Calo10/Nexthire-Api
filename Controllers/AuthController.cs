@@ -17,7 +17,7 @@ public class AuthController : ControllerBase
     private readonly IEmailService _emailService;
     private readonly IAuthLinkTokenStore _authLinkTokenStore;
     private readonly IJwtTokenService _jwtTokenService;
-    private readonly INexaTokenStore _nexaTokenStore;
+    private readonly INexaAccessTokenResolver _nexaTokens;
     private readonly ILogger<AuthController> _logger;
 
     public AuthController(
@@ -25,14 +25,14 @@ public class AuthController : ControllerBase
         IEmailService emailService,
         IAuthLinkTokenStore authLinkTokenStore,
         IJwtTokenService jwtTokenService,
-        INexaTokenStore nexaTokenStore,
+        INexaAccessTokenResolver nexaTokens,
         ILogger<AuthController> logger)
     {
         _nexaClient = nexaClient;
         _emailService = emailService;
         _authLinkTokenStore = authLinkTokenStore;
         _jwtTokenService = jwtTokenService;
-        _nexaTokenStore = nexaTokenStore;
+        _nexaTokens = nexaTokens;
         _logger = logger;
     }
 
@@ -41,7 +41,7 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpPost("auth/magic-link")]
     [AllowAnonymous]
-    public async Task<IActionResult> RequestMagicLink([FromBody] MagicLinkRequestDto request)
+    public async Task<IActionResult> RequestMagicLink([FromBody] MagicLinkRequestDto request, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
         {
@@ -50,10 +50,12 @@ public class AuthController : ControllerBase
 
         try
         {
-            var rawToken = GenerateRawToken();
-            _authLinkTokenStore.StoreMagicLinkToken(rawToken, request.Email, DateTimeOffset.UtcNow.AddMinutes(15));
-            await _emailService.SendMagicLinkAsync(request.Email, rawToken);
-            // Return 200 OK - don't reveal if email exists (for 4xx errors from Nexa)
+            var callbackUrl = string.IsNullOrWhiteSpace(request.CallbackUrl)
+                ? null
+                : request.CallbackUrl.Trim();
+
+            // Magic links are issued and validated by Nexa (same token for /api/auth/consume).
+            await _nexaClient.RequestMagicLinkAsync(request.Email, callbackUrl, cancellationToken);
             return Ok(new { message = "If the email exists, a magic link has been sent." });
         }
         catch (HttpRequestException ex)
@@ -84,18 +86,22 @@ public class AuthController : ControllerBase
     public async Task<ActionResult<ExchangeTokenResponseDto>> ExchangeToken([FromBody] ExchangeTokenRequestDto? request)
     {
         // Validate request and token
-        if (request == null || string.IsNullOrEmpty(request.Token))
+        if (request == null || string.IsNullOrWhiteSpace(request.Token))
         {
             _logger.LogWarning("Exchange token request missing or token is empty");
             return BadRequest(new { message = "Missing token" });
         }
 
-        _logger.LogInformation("Processing token exchange. Token length: {TokenLength}", request.Token.Length);
+        var token = NormalizeMagicLinkToken(request.Token);
+
+        _logger.LogInformation(
+            "Processing token exchange. Token length: {TokenLength}, SegmentCount: {SegmentCount}",
+            token.Length,
+            token.Count(c => c == '.') + 1);
 
         try
         {
-            // Call Nexa to validate/exchange the token
-            var nexaResponse = await _nexaClient.ExchangeTokenAsync(request.Token);
+            var nexaResponse = await _nexaClient.ExchangeTokenAsync(token);
 
             // Validate Nexa response structure
             if (nexaResponse == null)
@@ -136,12 +142,11 @@ public class AuthController : ControllerBase
             // Store Nexa tokens for later use (keyed by userId)
             _logger.LogInformation("Storing Nexa tokens for user {UserId} after successful exchange. ExpiresAt: {ExpiresAt}", 
                 nexaResponse.User.UserId, nexaResponse.ExpiresAt);
-            _nexaTokenStore.StoreTokens(
+            await _nexaTokens.PersistTokensAsync(
                 nexaResponse.User.UserId,
                 nexaResponse.AccessToken,
                 nexaResponse.RefreshToken,
-                nexaResponse.ExpiresAt
-            );
+                nexaResponse.ExpiresAt);
 
             var response = new ExchangeTokenResponseDto
             {
@@ -165,7 +170,10 @@ public class AuthController : ControllerBase
             if (ex.StatusCode == 400 || ex.StatusCode == 401)
             {
                 _logger.LogWarning(ex, "Nexa token exchange failed with {StatusCode}: {ErrorMessage}", ex.StatusCode, ex.ErrorMessage);
-                return Unauthorized(new { message = "Invalid or expired token" });
+                return Unauthorized(new
+                {
+                    message = "Invalid or expired token. Request a new magic link and open it once (email scanners can consume the link before you)."
+                });
             }
             else
             {
@@ -310,12 +318,11 @@ public class AuthController : ControllerBase
                 "Storing Nexa tokens for user {UserId} after successful password login. ExpiresAt: {ExpiresAt}",
                 nexaResponse.User.UserId, nexaResponse.ExpiresAt);
 
-            _nexaTokenStore.StoreTokens(
+            await _nexaTokens.PersistTokensAsync(
                 nexaResponse.User.UserId,
                 nexaResponse.AccessToken,
                 nexaResponse.RefreshToken,
-                nexaResponse.ExpiresAt
-            );
+                nexaResponse.ExpiresAt);
 
             var response = new ExchangeTokenResponseDto
             {
@@ -410,59 +417,12 @@ public class AuthController : ControllerBase
             return Unauthorized(new { message = "Invalid token claims" });
         }
 
-        // Get stored Nexa tokens
         _logger.LogInformation("Attempting to retrieve Nexa tokens for user {UserId}", userId);
-        var tokenInfo = _nexaTokenStore.GetTokens(userId);
-        
-        string nexaAccessToken;
-        if (tokenInfo == null || tokenInfo.IsExpired)
+        var nexaAccessToken = await _nexaTokens.GetValidAccessTokenAsync(userId);
+        if (string.IsNullOrWhiteSpace(nexaAccessToken))
         {
-            // Try to refresh if we have a refresh token
-            if (tokenInfo != null && !string.IsNullOrEmpty(tokenInfo.RefreshToken))
-            {
-                try
-                {
-                    _logger.LogInformation("Nexa token expired, attempting refresh for user {UserId}", userId);
-                    var refreshResponse = await _nexaClient.RefreshTokenAsync(tokenInfo.RefreshToken);
-                    
-                    // Store new tokens
-                    _nexaTokenStore.StoreTokens(
-                        userId,
-                        refreshResponse.AccessToken,
-                        refreshResponse.RefreshToken,
-                        refreshResponse.ExpiresAt
-                    );
-                    
-                    nexaAccessToken = refreshResponse.AccessToken;
-                    _logger.LogInformation("Successfully refreshed Nexa token for user {UserId}", userId);
-                }
-                catch (HttpRequestException ex) when (ex.Data.Contains("IsNotImplemented") && ex.Data["IsNotImplemented"]?.Equals(true) == true)
-                {
-                    _logger.LogWarning("Nexa refresh endpoint not available");
-                    return Unauthorized(new { message = "Nexa token expired, login again" });
-                }
-                catch (NexaAuthException ex)
-                {
-                    _logger.LogWarning(ex, "Nexa token refresh failed for user {UserId}", userId);
-                    _nexaTokenStore.RemoveTokens(userId);
-                    return Unauthorized(new { message = "Nexa token expired, login again" });
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error refreshing Nexa token for user {UserId}", userId);
-                    return Unauthorized(new { message = "Nexa token expired, login again" });
-                }
-            }
-            else
-            {
-                _logger.LogWarning("No valid Nexa token found for user {UserId}", userId);
-                return Unauthorized(new { message = "Missing Nexa token, login again" });
-            }
-        }
-        else
-        {
-            nexaAccessToken = tokenInfo.AccessToken;
-            _logger.LogInformation("Retrieved valid Nexa token for user {UserId}", userId);
+            _logger.LogWarning("No valid Nexa token found for user {UserId}", userId);
+            return Unauthorized(new { message = "Missing Nexa token, login again" });
         }
 
         // Validate input
@@ -541,59 +501,12 @@ public class AuthController : ControllerBase
             return Unauthorized(new { message = "Invalid token claims" });
         }
 
-        // Get stored Nexa tokens
         _logger.LogInformation("Attempting to retrieve Nexa tokens for user {UserId}", userId);
-        var tokenInfo = _nexaTokenStore.GetTokens(userId);
-        
-        string nexaAccessToken;
-        if (tokenInfo == null || tokenInfo.IsExpired)
+        var nexaAccessToken = await _nexaTokens.GetValidAccessTokenAsync(userId);
+        if (string.IsNullOrWhiteSpace(nexaAccessToken))
         {
-            // Try to refresh if we have a refresh token
-            if (tokenInfo != null && !string.IsNullOrEmpty(tokenInfo.RefreshToken))
-            {
-                try
-                {
-                    _logger.LogInformation("Nexa token expired, attempting refresh for user {UserId}", userId);
-                    var refreshResponse = await _nexaClient.RefreshTokenAsync(tokenInfo.RefreshToken);
-                    
-                    // Store new tokens
-                    _nexaTokenStore.StoreTokens(
-                        userId,
-                        refreshResponse.AccessToken,
-                        refreshResponse.RefreshToken,
-                        refreshResponse.ExpiresAt
-                    );
-                    
-                    nexaAccessToken = refreshResponse.AccessToken;
-                    _logger.LogInformation("Successfully refreshed Nexa token for user {UserId}", userId);
-                }
-                catch (HttpRequestException ex) when (ex.Data.Contains("IsNotImplemented") && ex.Data["IsNotImplemented"]?.Equals(true) == true)
-                {
-                    _logger.LogWarning("Nexa refresh endpoint not available");
-                    return Unauthorized(new { message = "Nexa token expired, login again" });
-                }
-                catch (NexaAuthException ex)
-                {
-                    _logger.LogWarning(ex, "Nexa token refresh failed for user {UserId}", userId);
-                    _nexaTokenStore.RemoveTokens(userId);
-                    return Unauthorized(new { message = "Nexa token expired, login again" });
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error refreshing Nexa token for user {UserId}", userId);
-                    return Unauthorized(new { message = "Nexa token expired, login again" });
-                }
-            }
-            else
-            {
-                _logger.LogWarning("No valid Nexa token found for user {UserId}", userId);
-                return Unauthorized(new { message = "Missing Nexa token, login again" });
-            }
-        }
-        else
-        {
-            nexaAccessToken = tokenInfo.AccessToken;
-            _logger.LogInformation("Retrieved valid Nexa token for user {UserId}", userId);
+            _logger.LogWarning("No valid Nexa token found for user {UserId}", userId);
+            return Unauthorized(new { message = "Missing Nexa token, login again" });
         }
 
         // Validate input
@@ -655,6 +568,15 @@ public class AuthController : ControllerBase
     {
         var tokenBytes = RandomNumberGenerator.GetBytes(32);
         return Convert.ToHexString(tokenBytes).ToLowerInvariant();
+    }
+
+    private static string NormalizeMagicLinkToken(string raw)
+    {
+        var token = Uri.UnescapeDataString(raw.Trim());
+        // Query strings sometimes turn '+' into space.
+        if (token.Contains(' ') && !token.Contains('+'))
+            token = token.Replace(' ', '+');
+        return token;
     }
 }
 
