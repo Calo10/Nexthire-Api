@@ -174,13 +174,13 @@ builder.Services.AddAuthentication(options =>
                 hasToken, context.Exception.Message);
             return Task.CompletedTask;
         },
-        OnChallenge = context =>
+        OnChallenge = async context =>
         {
             var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
             var hasToken = !string.IsNullOrEmpty(context.Request.Headers["Authorization"].ToString());
             logger.LogWarning("JWT challenge triggered. HasToken: {HasToken}, Error: {Error}, ErrorDescription: {ErrorDescription}", 
                 hasToken, context.Error, context.ErrorDescription);
-            return Task.CompletedTask;
+            await ApplyCorsPolicyAsync(context.HttpContext, "AllowFrontend");
         }
     };
 });
@@ -192,14 +192,20 @@ builder.Services.AddAuthorization(options =>
 });
 
 // Add custom services
-builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IOrgUserService, OrgUserService>();
+builder.Services.AddScoped<IOrgProvisioningService, OrgProvisioningService>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<INexaAccessTokenResolver, NexaAccessTokenResolver>();
 builder.Services.AddScoped<IJobService, JobService>();
+builder.Services.AddScoped<IJobBotQuestionService, JobBotQuestionService>();
 builder.Services.AddScoped<ICandidateService, CandidateService>();
 builder.Services.AddScoped<IRoleService, RoleService>();
 builder.Services.AddScoped<ITeamService, TeamService>();
 builder.Services.AddScoped<IApplicationsService, ApplicationsService>();
 builder.Services.AddScoped<IDocumentService, DocumentService>();
 builder.Services.AddScoped<IResumeDocumentsUploader, ResumeDocumentsUploader>();
+builder.Services.AddScoped<IWhatsAppTwilioMediaService, WhatsAppTwilioMediaService>();
+builder.Services.AddScoped<IWhatsAppApplyResumeService, WhatsAppApplyResumeService>();
 builder.Services.AddScoped<IWhatsAppInboundService, WhatsAppInboundService>();
 builder.Services.AddScoped<IWhatsAppAiService, WhatsAppAiService>();
 
@@ -208,10 +214,12 @@ builder.Services.AddSingleton<IDbConnectionFactory, SqlConnectionFactory>();
 
 builder.Services.AddScoped<IDashboardRepository, DashboardRepository>();
 builder.Services.AddScoped<IJobRepository, JobRepository>();
+builder.Services.AddScoped<IJobBotQuestionRepository, JobBotQuestionRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<ICandidateRepository, CandidateRepository>();
 builder.Services.AddScoped<IRoleRepository, RoleRepository>();
 builder.Services.AddScoped<ITeamRepository, TeamRepository>();
+builder.Services.AddScoped<INexaTokenRepository, NexaTokenRepository>();
 builder.Services.AddScoped<ITasksRepository, TasksRepository>();
 builder.Services.AddScoped<INotesRepository, NotesRepository>();
 builder.Services.AddScoped<IApplicationsRepository, ApplicationsRepository>();
@@ -245,6 +253,11 @@ builder.Services.AddHttpClient("Nexa", client =>
 
 // Documents function upload — no BaseAddress (full URL + x-functions-key avoids query-string loss)
 builder.Services.AddHttpClient("Documents", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(120);
+});
+
+builder.Services.AddHttpClient("Twilio", client =>
 {
     client.Timeout = TimeSpan.FromSeconds(120);
 });
@@ -295,7 +308,28 @@ static bool IsLocalDevFrontendOrigin(string origin)
     if (uri.Scheme is not "http" and not "https")
         return false;
 
-    return uri.Host is "localhost" or "127.0.0.1" or "[::1]";
+    if (uri.Host is "localhost" or "127.0.0.1" or "[::1]" or "0.0.0.0")
+        return true;
+
+    if (uri.Host.EndsWith(".local", StringComparison.OrdinalIgnoreCase))
+        return true;
+
+    // Vite --host / pruebas desde el móvil en la misma red
+    if (System.Net.IPAddress.TryParse(uri.Host, out var ip))
+    {
+        var bytes = ip.GetAddressBytes();
+        if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && bytes.Length == 4)
+        {
+            if (bytes[0] == 10)
+                return true;
+            if (bytes[0] == 192 && bytes[1] == 168)
+                return true;
+            if (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31)
+                return true;
+        }
+    }
+
+    return false;
 }
 
 builder.Services.AddCors(options =>
@@ -304,10 +338,12 @@ builder.Services.AddCors(options =>
     {
         if (builder.Environment.IsDevelopment())
         {
-            policy.SetIsOriginAllowed(IsLocalDevFrontendOrigin)
+            // Dev: accept any browser origin (Vite ports, 127.0.0.1, LAN IP, etc.)
+            policy.SetIsOriginAllowed(_ => true)
                   .AllowAnyMethod()
                   .AllowAnyHeader()
-                  .AllowCredentials();
+                  .AllowCredentials()
+                  .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
         }
         else
         {
@@ -341,14 +377,83 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
 }
+
+if (app.Environment.IsDevelopment())
+{
+    app.Use(async (context, next) =>
+    {
+        var origin = context.Request.Headers.Origin.ToString();
+        await next();
+        if (!string.IsNullOrEmpty(origin)
+            && !context.Response.Headers.ContainsKey("Access-Control-Allow-Origin"))
+        {
+            await ApplyCorsPolicyAsync(context, "AllowFrontend");
+            var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+            logger.LogWarning(
+                "CORS headers were missing; applied fallback. Origin={Origin} {Method} {Path} Status={Status}",
+                origin,
+                context.Request.Method,
+                context.Request.Path,
+                context.Response.StatusCode);
+        }
+    });
+}
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-await EnsureMarketingMetaCampaignsSchemaAsync(app.Services);
-await EnsureSourcingCampaignsSchemaAsync(app.Services);
+await Task.WhenAll(
+    EnsureMarketingMetaCampaignsSchemaAsync(app.Services),
+    EnsureSourcingCampaignsSchemaAsync(app.Services),
+    EnsureSourcingSourceTypesAsync(app.Services),
+    EnsureWhatsAppTenantMappingsAsync(app.Services),
+    EnsureNhUsersSchemaAsync(app.Services),
+    EnsureNexaUserTokensSchemaAsync(app.Services));
+
+app.Lifetime.ApplicationStarted.Register(() =>
+{
+    var logger = app.Services.GetRequiredService<ILogger<Program>>();
+    var urls = app.Urls.Count > 0 ? string.Join(", ", app.Urls) : "(default)";
+    logger.LogInformation(
+        "API ready at {Urls}. CORS={CorsMode}",
+        urls,
+        app.Environment.IsDevelopment()
+            ? "Development (any origin)"
+            : "Production (Cors:Origins + Frontend:BaseUrl only)");
+});
 
 app.Run();
+
+static async Task ApplyCorsPolicyAsync(HttpContext context, string policyName)
+{
+    var corsService = context.RequestServices.GetRequiredService<Microsoft.AspNetCore.Cors.Infrastructure.ICorsService>();
+    var policyProvider = context.RequestServices.GetRequiredService<Microsoft.AspNetCore.Cors.Infrastructure.ICorsPolicyProvider>();
+    var policy = await policyProvider.GetPolicyAsync(context, policyName);
+    if (policy is null)
+        return;
+
+    var result = corsService.EvaluatePolicy(context, policy);
+    corsService.ApplyResult(result, context.Response);
+}
+
+static async Task EnsureWhatsAppTenantMappingsAsync(IServiceProvider services)
+{
+    using var scope = services.CreateScope();
+    var repo = scope.ServiceProvider.GetRequiredService<IWhatsAppInboundRepository>();
+    var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        await repo.EnsureTenantMappingsSchemaAsync();
+        await repo.SyncTenantMappingsFromConfigAsync(configuration);
+        logger.LogInformation("whatsapp_tenant_mappings table is ready.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to ensure whatsapp_tenant_mappings schema.");
+    }
+}
 
 static async Task EnsureSourcingCampaignsSchemaAsync(IServiceProvider services)
 {
@@ -363,6 +468,54 @@ static async Task EnsureSourcingCampaignsSchemaAsync(IServiceProvider services)
     catch (Exception ex)
     {
         logger.LogError(ex, "Failed to ensure sourcing_campaigns schema.");
+    }
+}
+
+static async Task EnsureSourcingSourceTypesAsync(IServiceProvider services)
+{
+    using var scope = services.CreateScope();
+    var repo = scope.ServiceProvider.GetRequiredService<ISourcingRepository>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        await repo.EnsureDefaultSourceTypesAsync();
+        logger.LogInformation("sourcing_source_types defaults are ready (public_apply, whatsapp, meta_ads).");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to seed sourcing_source_types defaults.");
+    }
+}
+
+static async Task EnsureNexaUserTokensSchemaAsync(IServiceProvider services)
+{
+    using var scope = services.CreateScope();
+    var repo = scope.ServiceProvider.GetRequiredService<INexaTokenRepository>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        await repo.EnsureSchemaAsync();
+        logger.LogInformation("nexa_user_tokens table is ready.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to ensure nexa_user_tokens schema. Org invites may fail after API restart.");
+    }
+}
+
+static async Task EnsureNhUsersSchemaAsync(IServiceProvider services)
+{
+    using var scope = services.CreateScope();
+    var repo = scope.ServiceProvider.GetRequiredService<IUserRepository>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        await repo.EnsureSchemaAsync();
+        logger.LogInformation("nh_users schema is ready (nexa_user_id nullable for pending invites).");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to ensure nh_users schema. Org user invites may fail.");
     }
 }
 

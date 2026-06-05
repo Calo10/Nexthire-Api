@@ -38,6 +38,7 @@ public class SourcingLeadDetailDto : SourcingLeadListItemDto
     public bool? HasTransportation { get; set; }
     public bool? WillingToRelocate { get; set; }
     public string? QualificationNotes { get; set; }
+    public string? DynamicAnswersJson { get; set; }
     public string? RawPayloadJson { get; set; }
     public DateTimeOffset? ContactedAt { get; set; }
     public Guid? ConvertedCandidateId { get; set; }
@@ -126,6 +127,7 @@ public class CreateSourcingLeadRequestDto
 
     public string? QualificationNotes { get; set; }
     public string? ResumeUrl { get; set; }
+    public string? DynamicAnswersJson { get; set; }
     public string? RawPayloadJson { get; set; }
 }
 
@@ -261,6 +263,7 @@ public class UpdateSourcingLeadRequestDto
 
     public string? QualificationNotes { get; set; }
     public string? ResumeUrl { get; set; }
+    public string? DynamicAnswersJson { get; set; }
     public string? RawPayloadJson { get; set; }
 }
 

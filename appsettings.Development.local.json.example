@@ -1,6 +1,19 @@
 {
   "MessengerFunction": {
-    "Code": "paste-azure-function-key"
+    "Code": "paste-azure-function-key",
+    "TwilioAccountSid": "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "TwilioAuthToken": "paste-twilio-auth-token"
+  },
+  "Twilio": {
+    "AccountSid": "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "AuthToken": "paste-twilio-auth-token"
+  },
+  "Documents": {
+    "BaseUrl": "http://localhost:7071",
+    "FunctionKey": ""
+  },
+  "DocumentService": {
+    "BaseUrl": "http://localhost:7071"
   },
   "AzureOpenAI": {
     "Resource": "https://your-resource.cognitiveservices.azure.com",

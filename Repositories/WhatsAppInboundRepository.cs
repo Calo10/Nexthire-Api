@@ -1,6 +1,7 @@
 using System.Data;
 using System.Text.Json;
 using Dapper;
+using Microsoft.Extensions.Configuration;
 using nexthire_api.Data;
 using nexthire_api.DTOs;
 using nexthire_api.Helpers;
@@ -252,9 +253,8 @@ public class WhatsAppInboundRepository : IWhatsAppInboundRepository
         }
     }
 
-    public async Task<WhatsAppBotConfigDto?> GetBotConfigAsync(string tenantId)
+    public async Task<WhatsAppBotConfigDto?> GetBotConfigAsync(string tenantId, string? alternateTenantId = null)
     {
-        // history_message_limit / model are optional in DB; use appsettings AzureOpenAI:Deployment when BotModel is null.
         const string sql = @"
             SELECT TOP 1
                 tenant_id AS TenantId,
@@ -263,10 +263,100 @@ public class WhatsAppInboundRepository : IWhatsAppInboundRepository
                 10 AS HistoryMessageLimit,
                 CAST(NULL AS NVARCHAR(200)) AS BotModel
             FROM whatsapp_bot_config
-            WHERE tenant_id = @tenantId;";
+            WHERE is_enabled = 1
+              AND tenant_id IN (@tenantId, @alternateTenantId)
+            ORDER BY CASE WHEN tenant_id = @tenantId THEN 0 ELSE 1 END;";
 
         using var connection = _connectionFactory.CreateConnection();
-        return await connection.QueryFirstOrDefaultAsync<WhatsAppBotConfigDto>(sql, new { tenantId });
+        return await connection.QueryFirstOrDefaultAsync<WhatsAppBotConfigDto>(
+            sql,
+            new { tenantId, alternateTenantId = alternateTenantId ?? tenantId });
+    }
+
+    public async Task EnsureTenantMappingsSchemaAsync(CancellationToken cancellationToken = default)
+    {
+        const string sql = @"
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'whatsapp_tenant_mappings' AND schema_id = SCHEMA_ID('dbo'))
+BEGIN
+    CREATE TABLE dbo.whatsapp_tenant_mappings
+    (
+        messenger_tenant NVARCHAR(100) NOT NULL CONSTRAINT PK_whatsapp_tenant_mappings PRIMARY KEY,
+        org_id UNIQUEIDENTIFIER NOT NULL,
+        created_at_utc DATETIMEOFFSET(7) NOT NULL CONSTRAINT DF_whatsapp_tenant_mappings_created DEFAULT (SYSDATETIMEOFFSET())
+    );
+    CREATE INDEX IX_whatsapp_tenant_mappings_org_id ON dbo.whatsapp_tenant_mappings (org_id);
+END";
+
+        using var connection = _connectionFactory.CreateConnection();
+        await connection.ExecuteAsync(new CommandDefinition(sql, cancellationToken: cancellationToken));
+    }
+
+    public async Task SyncTenantMappingsFromConfigAsync(IConfiguration configuration, CancellationToken cancellationToken = default)
+    {
+        await EnsureTenantMappingsSchemaAsync(cancellationToken);
+
+        const string mergeSql = @"
+MERGE dbo.whatsapp_tenant_mappings AS t
+USING (SELECT @messengerTenant AS messenger_tenant, @orgId AS org_id) AS s
+ON t.messenger_tenant = s.messenger_tenant
+WHEN MATCHED AND t.org_id <> s.org_id THEN
+    UPDATE SET org_id = s.org_id
+WHEN NOT MATCHED THEN
+    INSERT (messenger_tenant, org_id) VALUES (s.messenger_tenant, s.org_id);";
+
+        using var connection = _connectionFactory.CreateConnection();
+        foreach (var child in configuration.GetSection("WhatsApp:InboundTenantAliases").GetChildren())
+        {
+            if (string.IsNullOrWhiteSpace(child.Value))
+                continue;
+            if (!Guid.TryParse(child.Value.Trim(), out var orgId))
+                continue;
+
+            await connection.ExecuteAsync(
+                new CommandDefinition(
+                    mergeSql,
+                    new { messengerTenant = child.Key.Trim(), orgId },
+                    cancellationToken: cancellationToken));
+        }
+    }
+
+    public async Task<Guid?> LookupOrgIdByMessengerTenantAsync(string messengerTenant, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(messengerTenant))
+            return null;
+
+        const string sql = @"
+            SELECT org_id
+            FROM whatsapp_tenant_mappings
+            WHERE messenger_tenant = @messengerTenant;";
+
+        using var connection = _connectionFactory.CreateConnection();
+        return await connection.ExecuteScalarAsync<Guid?>(
+            new CommandDefinition(sql, new { messengerTenant = messengerTenant.Trim() }, cancellationToken: cancellationToken));
+    }
+
+    public async Task<string> ResolveInboundTenantAsync(
+        string rawTenantId,
+        IConfiguration configuration,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(rawTenantId))
+            return rawTenantId;
+
+        var trimmed = rawTenantId.Trim();
+
+        var fromDb = await LookupOrgIdByMessengerTenantAsync(trimmed, cancellationToken);
+        if (fromDb.HasValue)
+            return fromDb.Value.ToString();
+
+        var fromConfig = WhatsAppTenantResolver.Resolve(configuration, trimmed);
+        if (Guid.TryParse(fromConfig, out _))
+            return fromConfig;
+
+        if (Guid.TryParse(trimmed, out _))
+            return trimmed;
+
+        return fromConfig;
     }
 
     public async Task<IReadOnlyList<WhatsAppMessageHistoryItemDto>> GetRecentMessagesAsync(Guid conversationId, int maxMessages)

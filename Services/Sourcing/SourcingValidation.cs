@@ -1,5 +1,6 @@
 using System.Net.Mail;
 using nexthire_api.DTOs.Sourcing;
+using nexthire_api.Helpers;
 using nexthire_api.Sourcing;
 
 namespace nexthire_api.Services.Sourcing;
@@ -27,6 +28,7 @@ internal static class SourcingValidation
 
     public static void ValidateOptionalEmail(string? email)
     {
+        email = PublicJobApplyFormParser.NormalizeFormFieldValue(email);
         if (string.IsNullOrWhiteSpace(email))
             return;
 
@@ -76,6 +78,7 @@ internal static class SourcingValidation
 
     public static string NormalizeEmail(string? email)
     {
-        return string.IsNullOrWhiteSpace(email) ? string.Empty : email.Trim().ToLowerInvariant();
+        email = PublicJobApplyFormParser.NormalizeFormFieldValue(email);
+        return string.IsNullOrWhiteSpace(email) ? string.Empty : email.ToLowerInvariant();
     }
 }

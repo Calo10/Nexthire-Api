@@ -86,5 +86,25 @@ public class PipelineRepository : IPipelineRepository
         using var connection = _connectionFactory.CreateConnection();
         return await connection.ExecuteScalarAsync<int>(sql, new { orgId, jobId }) == 1;
     }
+
+    public async Task<Guid?> GetJobOrgIdAsync(Guid jobId)
+    {
+        const string sql = @"SELECT org_id FROM jobs WHERE id = @jobId;";
+        using var connection = _connectionFactory.CreateConnection();
+        return await connection.ExecuteScalarAsync<Guid?>(sql, new { jobId });
+    }
+
+    public async Task<JobBotContextDto?> GetJobBotContextAsync(Guid jobId)
+    {
+        const string sql = @"
+            SELECT
+                org_id AS OrgId,
+                language AS Language
+            FROM jobs
+            WHERE id = @jobId;";
+
+        using var connection = _connectionFactory.CreateConnection();
+        return await connection.QueryFirstOrDefaultAsync<JobBotContextDto>(sql, new { jobId });
+    }
 }
 

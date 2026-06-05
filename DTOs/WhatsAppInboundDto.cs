@@ -35,6 +35,23 @@ public class WhatsAppInboundMessageDto
 public class WhatsAppInboundMediaDto
 {
     public string? Url { get; set; }
+
+    /// <summary>From nexthire-api payloads.</summary>
     public string? MimeType { get; set; }
+
+    /// <summary>From nexa-messenger forward payloads.</summary>
+    public string? ContentType { get; set; }
+
+    public string? ResolvedMimeType =>
+        !string.IsNullOrWhiteSpace(MimeType) ? MimeType.Trim()
+        : !string.IsNullOrWhiteSpace(ContentType) ? ContentType.Trim()
+        : null;
+
     public string? Caption { get; set; }
+
+    /// <summary>Optional file name when the messenger forwards downloaded bytes.</summary>
+    public string? FileName { get; set; }
+
+    /// <summary>Base64-encoded file bytes (avoids Twilio download from nexthire-api).</summary>
+    public string? ContentBase64 { get; set; }
 }
