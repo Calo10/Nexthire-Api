@@ -686,7 +686,7 @@ public class NexaClient : INexaClient
                 "Nexa org invite failed. OrgId={OrgId} Status={Status} BodyLength={Length}",
                 orgId, response.StatusCode, responseContent.Length);
             var statusCode = (int)response.StatusCode;
-            if (statusCode is 400 or 401 or 403 or 404)
+            if (statusCode is 400 or 401 or 403 or 404 or 409)
             {
                 var ex = new HttpRequestException($"Nexa API returned error: {response.StatusCode}");
                 ex.Data["StatusCode"] = response.StatusCode;
