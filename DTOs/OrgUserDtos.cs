@@ -41,6 +41,12 @@ public class CreateOrgUserRequestDto
     /// <summary>Send Nexa magic link email after creating the invite.</summary>
     public bool SendLoginLink { get; set; } = true;
 
+    /// <summary>
+    /// Where Nexa should redirect after the user opens the magic link (e.g. https://app.example.com/auth/callback).
+    /// Falls back to Frontend:BaseUrl + /auth/callback when omitted.
+    /// </summary>
+    public string? LoginCallbackUrl { get; set; }
+
     /// <summary>Optional Nexa access token (from login/consume). Prefer header X-Nexa-Access-Token.</summary>
     public string? NexaAccessToken { get; set; }
 }
