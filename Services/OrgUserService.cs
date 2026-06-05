@@ -136,17 +136,12 @@ public class OrgUserService : IOrgUserService
         if (nexaRole is not ("admin" or "member"))
             throw new ArgumentException("nexaOrgRole must be admin or member.");
 
+        var existingUser = await _users.GetByEmailAsync(orgId, email);
+        if (existingUser?.NexaUserId.HasValue == true)
+            throw new ArgumentException("User is already an active member of this organization.");
+
         var nexaToken = await RequireNexaTokenAsync(requesterNexaUserId, dto.NexaAccessToken, cancellationToken);
-        NexaOrgInviteDto invite;
-        try
-        {
-            invite = await _nexa.SendOrgInviteAsync(orgId, email, nexaRole, nexaToken, cancellationToken)
-                     ?? throw new InvalidOperationException("Nexa did not return an invite.");
-        }
-        catch (HttpRequestException ex) when (ex.Data.Contains("StatusCode"))
-        {
-            throw MapNexaHttpException(ex);
-        }
+        var invite = await ResolveOrCreateInviteAsync(orgId, email, nexaRole, nexaToken, cancellationToken);
 
         var nhUserId = await _users.UpsertPendingByEmailAsync(orgId, email, dto.FirstName, dto.LastName, dto.Phone);
 
@@ -266,6 +261,96 @@ public class OrgUserService : IOrgUserService
         }
 
         return deleted;
+    }
+
+    private async Task<NexaOrgInviteDto> ResolveOrCreateInviteAsync(
+        Guid orgId,
+        string email,
+        string nexaRole,
+        string nexaToken,
+        CancellationToken cancellationToken)
+    {
+        var pendingInvite = await FindPendingInviteAsync(orgId, email, nexaToken, cancellationToken);
+        if (pendingInvite is not null)
+        {
+            _logger.LogInformation("Reusing existing Nexa pending invite for {Email} in org {OrgId}", email, orgId);
+            return pendingInvite;
+        }
+
+        try
+        {
+            return await _nexa.SendOrgInviteAsync(orgId, email, nexaRole, nexaToken, cancellationToken)
+                   ?? throw new InvalidOperationException("Nexa did not return an invite.");
+        }
+        catch (HttpRequestException ex) when (ex.Data.Contains("StatusCode"))
+        {
+            var recovered = await FindPendingInviteAsync(orgId, email, nexaToken, cancellationToken);
+            if (recovered is not null)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Nexa invite create failed for {Email} but pending invite exists; continuing with existing invite",
+                    email);
+                return recovered;
+            }
+
+            throw MapNexaHttpException(ex);
+        }
+        catch (HttpRequestException ex)
+        {
+            var recovered = await FindPendingInviteAsync(orgId, email, nexaToken, cancellationToken);
+            if (recovered is not null)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Nexa invite create failed for {Email} but pending invite exists; continuing with existing invite",
+                    email);
+                return recovered;
+            }
+
+            throw;
+        }
+    }
+
+    private async Task<NexaOrgInviteDto?> FindPendingInviteAsync(
+        Guid orgId,
+        string email,
+        string nexaToken,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var members = await _nexa.ListOrgMembersAsync(orgId, nexaToken, cancellationToken);
+            if (members.Any(m => string.Equals(m.Email.Trim(), email, StringComparison.OrdinalIgnoreCase)))
+                throw new ArgumentException("User is already an active member of this organization.");
+        }
+        catch (HttpRequestException ex) when (ex.Data["StatusCode"] is System.Net.HttpStatusCode.Unauthorized
+                                              or System.Net.HttpStatusCode.Forbidden)
+        {
+            throw MapNexaHttpException(ex);
+        }
+        catch (ArgumentException)
+        {
+            throw;
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogWarning(ex, "Could not verify Nexa members before invite for org {OrgId}", orgId);
+        }
+
+        try
+        {
+            var pendingInvites = await _nexa.ListOrgInvitesAsync(orgId, nexaToken, cancellationToken);
+            return pendingInvites
+                .Where(i => string.Equals(i.Email.Trim(), email, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(i => i.CreatedAt)
+                .FirstOrDefault();
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogWarning(ex, "Could not list Nexa pending invites for org {OrgId}", orgId);
+            return null;
+        }
     }
 
     private async Task<string> RequireNexaTokenAsync(
