@@ -202,6 +202,72 @@ public class OrgUserService : IOrgUserService
         return _users.UpdateProfileAsync(orgId, userId, dto);
     }
 
+    public async Task<bool> RemoveInvitedAsync(
+        Guid orgId,
+        string requesterNexaUserId,
+        Guid userId,
+        string? nexaAccessTokenOverride = null,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _users.GetByIdAsync(orgId, userId);
+        if (user is null)
+            return false;
+
+        if (user.NexaUserId.HasValue)
+        {
+            throw new ArgumentException(
+                "Cannot remove an active organization member. Only pending invited users can be removed.");
+        }
+
+        var nexaToken = await RequireNexaTokenAsync(requesterNexaUserId, nexaAccessTokenOverride, cancellationToken);
+        var emailKey = user.Email.Trim().ToLowerInvariant();
+
+        try
+        {
+            var pendingInvites = await _nexa.ListOrgInvitesAsync(orgId, nexaToken, cancellationToken);
+            var invite = pendingInvites
+                .Where(i => i.Email.Trim().ToLowerInvariant() == emailKey)
+                .OrderByDescending(i => i.CreatedAt)
+                .FirstOrDefault();
+
+            if (invite is not null)
+            {
+                try
+                {
+                    await _nexa.RevokeOrgInviteAsync(orgId, invite.InviteId, nexaToken, cancellationToken);
+                }
+                catch (HttpRequestException ex) when (ex.Data.Contains("StatusCode"))
+                {
+                    throw MapNexaHttpException(ex);
+                }
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "No pending Nexa invite for {Email} in org {OrgId}; removing local nh_users row only",
+                    user.Email,
+                    orgId);
+            }
+        }
+        catch (HttpRequestException ex) when (ex.Data["StatusCode"] is System.Net.HttpStatusCode.Unauthorized
+                                              or System.Net.HttpStatusCode.Forbidden)
+        {
+            throw MapNexaHttpException(ex);
+        }
+
+        var deleted = await _users.DeleteFromOrgAsync(orgId, userId);
+        if (deleted)
+        {
+            _logger.LogInformation(
+                "Removed invited org user. OrgId={OrgId} UserId={UserId} Email={Email}",
+                orgId,
+                userId,
+                user.Email);
+        }
+
+        return deleted;
+    }
+
     private async Task<string> RequireNexaTokenAsync(
         string nexaUserId,
         string? accessTokenOverride,

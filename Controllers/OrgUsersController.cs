@@ -104,6 +104,42 @@ public class OrgUsersController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Remove a pending invited user (revokes Nexa invite and deletes nh_users + roles/teams).
+    /// Send header <c>X-Nexa-Access-Token</c> when the server was restarted.
+    /// </summary>
+    [HttpDelete("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RemoveInvited(Guid id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var orgId = ClaimUtils.RequireOrgId(User);
+            var nexaUserId = ClaimUtils.RequireNexaUserId(User).ToString();
+            var nexaTokenOverride = Request.Headers[NexaAccessTokenResolver.NexaAccessTokenHeader].FirstOrDefault();
+            var removed = await _orgUsers.RemoveInvitedAsync(orgId, nexaUserId, id, nexaTokenOverride, cancellationToken);
+            if (!removed)
+                return NotFound(new { message = "User not found in this organization." });
+            return NoContent();
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error removing invited org user {UserId}", id);
+            return StatusCode(500, new { message = "An error occurred while removing the user." });
+        }
+    }
+
     [HttpPatch("{id:guid}")]
     [ProducesResponseType(typeof(OrgUserDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
