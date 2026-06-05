@@ -9,17 +9,20 @@ public class OrgProvisioningService : IOrgProvisioningService
     private readonly INexaClient _nexa;
     private readonly IUserRepository _users;
     private readonly IRoleRepository _roles;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<OrgProvisioningService> _logger;
 
     public OrgProvisioningService(
         INexaClient nexa,
         IUserRepository users,
         IRoleRepository roles,
+        IConfiguration configuration,
         ILogger<OrgProvisioningService> logger)
     {
         _nexa = nexa;
         _users = users;
         _roles = roles;
+        _configuration = configuration;
         _logger = logger;
     }
 
@@ -62,7 +65,8 @@ public class OrgProvisioningService : IOrgProvisioningService
         {
             try
             {
-                await _nexa.RequestMagicLinkAsync(email, request.LoginCallbackUrl, cancellationToken);
+                var callbackUrl = ResolveLoginCallbackUrl(request.LoginCallbackUrl);
+                await _nexa.RequestMagicLinkAsync(email, callbackUrl, cancellationToken);
                 loginLinkSent = true;
             }
             catch (Exception ex)
@@ -85,6 +89,20 @@ public class OrgProvisioningService : IOrgProvisioningService
             NextHireUserId = nhUserId,
             LoginLinkSent = loginLinkSent
         };
+    }
+
+    private string ResolveLoginCallbackUrl(string? overrideUrl)
+    {
+        var callback = string.IsNullOrWhiteSpace(overrideUrl) ? null : overrideUrl.Trim();
+        if (!string.IsNullOrEmpty(callback))
+            return callback;
+
+        var frontendBase = _configuration["Frontend:BaseUrl"]
+                           ?? _configuration["AppSettings:FrontendUrl"]
+                           ?? throw new InvalidOperationException(
+                               "Frontend:BaseUrl is not configured. Set Frontend__BaseUrl in Azure App Settings or pass loginCallbackUrl.");
+
+        return $"{frontendBase.Trim().TrimEnd('/')}/auth/callback";
     }
 
     private static Exception MapNexaProvisionException(HttpRequestException ex)

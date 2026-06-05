@@ -11,6 +11,7 @@ public class OrgUserService : IOrgUserService
     private readonly INexaClient _nexa;
     private readonly INexaAccessTokenResolver _nexaTokens;
     private readonly IEmailService _email;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<OrgUserService> _logger;
 
     public OrgUserService(
@@ -20,6 +21,7 @@ public class OrgUserService : IOrgUserService
         INexaClient nexa,
         INexaAccessTokenResolver nexaTokens,
         IEmailService email,
+        IConfiguration configuration,
         ILogger<OrgUserService> logger)
     {
         _users = users;
@@ -28,6 +30,7 @@ public class OrgUserService : IOrgUserService
         _nexa = nexa;
         _nexaTokens = nexaTokens;
         _email = email;
+        _configuration = configuration;
         _logger = logger;
     }
 
@@ -171,7 +174,8 @@ public class OrgUserService : IOrgUserService
         {
             try
             {
-                await _nexa.RequestMagicLinkAsync(email, cancellationToken: cancellationToken);
+                var callbackUrl = ResolveLoginCallbackUrl(dto.LoginCallbackUrl);
+                await _nexa.RequestMagicLinkAsync(email, callbackUrl, cancellationToken);
             }
             catch (Exception ex)
             {
@@ -351,6 +355,20 @@ public class OrgUserService : IOrgUserService
             _logger.LogWarning(ex, "Could not list Nexa pending invites for org {OrgId}", orgId);
             return null;
         }
+    }
+
+    private string ResolveLoginCallbackUrl(string? overrideUrl)
+    {
+        var callback = string.IsNullOrWhiteSpace(overrideUrl) ? null : overrideUrl.Trim();
+        if (!string.IsNullOrEmpty(callback))
+            return callback;
+
+        var frontendBase = _configuration["Frontend:BaseUrl"]
+                           ?? _configuration["AppSettings:FrontendUrl"]
+                           ?? throw new InvalidOperationException(
+                               "Frontend:BaseUrl is not configured. Set it in Azure App Settings (Frontend__BaseUrl) or pass loginCallbackUrl in the invite request.");
+
+        return $"{frontendBase.Trim().TrimEnd('/')}/auth/callback";
     }
 
     private async Task<string> RequireNexaTokenAsync(
