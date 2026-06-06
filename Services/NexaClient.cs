@@ -17,6 +17,16 @@ public interface INexaClient
     Task<object> SetPasswordAsync(string currentPassword, string newPassword, string confirmPassword, string nexaAccessToken, CancellationToken cancellationToken = default);
     Task<object> InitializePasswordAsync(string newPassword, string confirmPassword, string nexaAccessToken, CancellationToken cancellationToken = default);
     Task<NexaExchangeResponseDto> RefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default);
+    Task<NexaOrgInviteDto?> SendOrgInviteAsync(Guid orgId, string email, string role, string nexaAccessToken, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<NexaOrgInviteDto>> ListOrgInvitesAsync(Guid orgId, string nexaAccessToken, CancellationToken cancellationToken = default);
+    Task<bool> RevokeOrgInviteAsync(Guid orgId, Guid inviteId, string nexaAccessToken, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<NexaOrgMemberDto>> ListOrgMembersAsync(Guid orgId, string nexaAccessToken, CancellationToken cancellationToken = default);
+    Task<NexaProvisionOrganizationResponse> ProvisionOrganizationAsync(
+        string name,
+        string timezone,
+        string adminEmail,
+        string? adminFullName,
+        CancellationToken cancellationToken = default);
 }
 
 public class NexaClient : INexaClient
@@ -27,15 +37,19 @@ public class NexaClient : INexaClient
     private readonly string _magicLinkPath;
     private readonly string _consumePath;
     private readonly string _createOrgPath;
+    private readonly string _provisionOrgPath;
+    private readonly IConfiguration _configuration;
 
     public NexaClient(IHttpClientFactory httpClientFactory, IConfiguration configuration, ILogger<NexaClient> logger)
     {
         _httpClient = httpClientFactory.CreateClient("Nexa");
         _logger = logger;
+        _configuration = configuration;
         _apiKey = configuration["Nexa:ApiKey"] ?? throw new InvalidOperationException("Nexa:ApiKey is not configured");
         _magicLinkPath = configuration["Nexa:MagicLinkPath"] ?? "v1/auth/magic-link";
         _consumePath = configuration["Nexa:ConsumePath"] ?? "v1/auth/consume";
         _createOrgPath = configuration["Nexa:CreateOrgPath"] ?? "v1/organizations";
+        _provisionOrgPath = configuration["Nexa:ProvisionOrgPath"] ?? "v1/orgs/provision";
 
         _httpClient.DefaultRequestHeaders.Add("X-Nexa-Api-Key", _apiKey);
     }
@@ -645,5 +659,192 @@ public class NexaClient : INexaClient
         _logger.LogInformation("Token refreshed successfully in Nexa");
         return result;
     }
+
+    public async Task<NexaOrgInviteDto?> SendOrgInviteAsync(
+        Guid orgId,
+        string email,
+        string role,
+        string nexaAccessToken,
+        CancellationToken cancellationToken = default)
+    {
+        var requestUrl = $"/v1/orgs/{orgId}/invites";
+        var requestMessage = new HttpRequestMessage(HttpMethod.Post, requestUrl)
+        {
+            Content = JsonContent.Create(new { email, role })
+        };
+        requestMessage.Headers.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", nexaAccessToken);
+        if (!string.IsNullOrEmpty(_apiKey))
+            requestMessage.Headers.Add("X-Nexa-Api-Key", _apiKey);
+
+        var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
+        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning(
+                "Nexa org invite failed. OrgId={OrgId} Status={Status} BodyLength={Length}",
+                orgId, response.StatusCode, responseContent.Length);
+            var statusCode = (int)response.StatusCode;
+            if (statusCode is 400 or 401 or 403 or 404 or 409)
+            {
+                var ex = new HttpRequestException($"Nexa API returned error: {response.StatusCode}");
+                ex.Data["StatusCode"] = response.StatusCode;
+                ex.Data["ErrorBody"] = responseContent;
+                throw ex;
+            }
+
+            throw new HttpRequestException($"Nexa API returned error: {response.StatusCode}");
+        }
+
+        return JsonSerializer.Deserialize<NexaOrgInviteDto>(responseContent, JsonOptions)
+               ?? throw new InvalidOperationException("Empty Nexa invite response");
+    }
+
+    public async Task<IReadOnlyList<NexaOrgInviteDto>> ListOrgInvitesAsync(
+        Guid orgId,
+        string nexaAccessToken,
+        CancellationToken cancellationToken = default)
+    {
+        var requestUrl = $"/v1/orgs/{orgId}/invites";
+        var requestMessage = new HttpRequestMessage(HttpMethod.Get, requestUrl);
+        requestMessage.Headers.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", nexaAccessToken);
+        if (!string.IsNullOrEmpty(_apiKey))
+            requestMessage.Headers.Add("X-Nexa-Api-Key", _apiKey);
+
+        var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
+        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning(
+                "Nexa list invites failed. OrgId={OrgId} Status={Status}",
+                orgId, response.StatusCode);
+            var ex = new HttpRequestException($"Nexa API returned error: {response.StatusCode}");
+            ex.Data["StatusCode"] = response.StatusCode;
+            ex.Data["ErrorBody"] = responseContent;
+            throw ex;
+        }
+
+        return JsonSerializer.Deserialize<List<NexaOrgInviteDto>>(responseContent, JsonOptions) ?? [];
+    }
+
+    public async Task<bool> RevokeOrgInviteAsync(
+        Guid orgId,
+        Guid inviteId,
+        string nexaAccessToken,
+        CancellationToken cancellationToken = default)
+    {
+        var requestUrl = $"/v1/orgs/{orgId}/invites/{inviteId}";
+        var requestMessage = new HttpRequestMessage(HttpMethod.Delete, requestUrl);
+        requestMessage.Headers.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", nexaAccessToken);
+        if (!string.IsNullOrEmpty(_apiKey))
+            requestMessage.Headers.Add("X-Nexa-Api-Key", _apiKey);
+
+        var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            return false;
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogWarning(
+                "Nexa revoke invite failed. OrgId={OrgId} InviteId={InviteId} Status={Status}",
+                orgId, inviteId, response.StatusCode);
+            var ex = new HttpRequestException($"Nexa API returned error: {response.StatusCode}");
+            ex.Data["StatusCode"] = response.StatusCode;
+            ex.Data["ErrorBody"] = responseContent;
+            throw ex;
+        }
+
+        return true;
+    }
+
+    public async Task<IReadOnlyList<NexaOrgMemberDto>> ListOrgMembersAsync(
+        Guid orgId,
+        string nexaAccessToken,
+        CancellationToken cancellationToken = default)
+    {
+        var requestUrl = $"/v1/orgs/{orgId}/members";
+        var requestMessage = new HttpRequestMessage(HttpMethod.Get, requestUrl);
+        requestMessage.Headers.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", nexaAccessToken);
+        if (!string.IsNullOrEmpty(_apiKey))
+            requestMessage.Headers.Add("X-Nexa-Api-Key", _apiKey);
+
+        var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
+        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning(
+                "Nexa list members failed. OrgId={OrgId} Status={Status}",
+                orgId, response.StatusCode);
+            var ex = new HttpRequestException($"Nexa API returned error: {response.StatusCode}");
+            ex.Data["StatusCode"] = response.StatusCode;
+            ex.Data["ErrorBody"] = responseContent;
+            throw ex;
+        }
+
+        return JsonSerializer.Deserialize<List<NexaOrgMemberDto>>(responseContent, JsonOptions) ?? [];
+    }
+
+    public async Task<NexaProvisionOrganizationResponse> ProvisionOrganizationAsync(
+        string name,
+        string timezone,
+        string adminEmail,
+        string? adminFullName,
+        CancellationToken cancellationToken = default)
+    {
+        var provisioningApiKey = _configuration["Provisioning:ApiKey"]?.Trim();
+        if (string.IsNullOrWhiteSpace(provisioningApiKey))
+            throw new InvalidOperationException("Provisioning:ApiKey is not configured.");
+
+        var requestUrl = $"/{_provisionOrgPath.TrimStart('/')}";
+        var requestMessage = new HttpRequestMessage(HttpMethod.Post, requestUrl)
+        {
+            Content = JsonContent.Create(new
+            {
+                name,
+                timezone,
+                adminEmail,
+                adminFullName
+            })
+        };
+        requestMessage.Headers.Add("X-Api-Key", provisioningApiKey);
+
+        var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
+        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning(
+                "Nexa provision org failed. Status={Status} BodyLength={Length}",
+                response.StatusCode, responseContent.Length);
+
+            var ex = new HttpRequestException($"Nexa API returned error: {response.StatusCode}");
+            ex.Data["StatusCode"] = response.StatusCode;
+            ex.Data["ErrorBody"] = responseContent;
+            throw ex;
+        }
+
+        var result = JsonSerializer.Deserialize<NexaProvisionOrganizationResponse>(responseContent, JsonOptions)
+                     ?? throw new InvalidOperationException("Empty Nexa provision response");
+
+        _logger.LogInformation(
+            "Nexa org provisioned. OrgId={OrgId} AdminUserId={AdminUserId} AdminCreated={AdminCreated}",
+            result.OrganizationId, result.AdminUserId, result.AdminUserCreated);
+
+        return result;
+    }
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
 }
 

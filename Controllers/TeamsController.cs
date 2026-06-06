@@ -9,6 +9,7 @@ namespace nexthire_api.Controllers;
 
 [ApiController]
 [Route("api/teams")]
+[Route("teams")] // alias: algunos clientes llaman /teams sin el prefijo /api
 [Authorize]
 public class TeamsController : ControllerBase
 {

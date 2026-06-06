@@ -144,19 +144,18 @@ public class TeamRepository : ITeamRepository
         const string sql = @"
             SELECT
                 u.id AS UserId,
-                u.first_name AS FirstName,
-                u.last_name AS LastName,
+                u.display_name AS DisplayName,
                 u.email AS Email,
                 tm.is_team_lead AS IsTeamLead,
                 tm.created_at AS JoinedAt
             FROM team_members tm
             INNER JOIN nh_users u ON u.id = tm.user_id AND u.org_id = @orgId
             WHERE tm.org_id = @orgId AND tm.team_id = @teamId
-            ORDER BY u.last_name ASC, u.first_name ASC;";
+            ORDER BY u.display_name ASC;";
 
         using var connection = _connectionFactory.CreateConnection();
-        var rows = await connection.QueryAsync<TeamMemberDto>(sql, new { orgId, teamId });
-        return rows.ToList();
+        var rows = (await connection.QueryAsync<TeamMemberRow>(sql, new { orgId, teamId })).ToList();
+        return rows.Select(MapTeamMember).ToList();
     }
 
     public async Task<bool> TeamMembershipExistsAsync(Guid orgId, Guid teamId, Guid userId)
@@ -180,8 +179,7 @@ public class TeamRepository : ITeamRepository
 
             SELECT
                 u.id AS UserId,
-                u.first_name AS FirstName,
-                u.last_name AS LastName,
+                u.display_name AS DisplayName,
                 u.email AS Email,
                 tm.is_team_lead AS IsTeamLead,
                 tm.created_at AS JoinedAt
@@ -190,7 +188,7 @@ public class TeamRepository : ITeamRepository
             WHERE tm.org_id = @orgId AND tm.team_id = @teamId AND tm.user_id = @userId;";
 
         using var connection = _connectionFactory.CreateConnection();
-        return await connection.QueryFirstOrDefaultAsync<TeamMemberDto>(sql, new
+        var row = await connection.QueryFirstOrDefaultAsync<TeamMemberRow>(sql, new
         {
             id = Guid.NewGuid(),
             orgId,
@@ -198,6 +196,42 @@ public class TeamRepository : ITeamRepository
             userId,
             isTeamLead
         });
+        return row is null ? null : MapTeamMember(row);
+    }
+
+    private static TeamMemberDto MapTeamMember(TeamMemberRow row)
+    {
+        var (firstName, lastName) = SplitDisplayName(row.DisplayName, row.Email);
+        return new TeamMemberDto
+        {
+            UserId = row.UserId,
+            FirstName = firstName,
+            LastName = lastName,
+            Email = row.Email,
+            IsTeamLead = row.IsTeamLead,
+            JoinedAt = row.JoinedAt
+        };
+    }
+
+    private static (string FirstName, string LastName) SplitDisplayName(string? displayName, string? email)
+    {
+        if (!string.IsNullOrWhiteSpace(displayName))
+        {
+            var parts = displayName.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+            return (parts[0], parts.Length == 2 ? parts[1] : string.Empty);
+        }
+
+        var local = (email ?? string.Empty).Split('@')[0];
+        return (local, string.Empty);
+    }
+
+    private sealed class TeamMemberRow
+    {
+        public Guid UserId { get; set; }
+        public string? DisplayName { get; set; }
+        public string? Email { get; set; }
+        public bool IsTeamLead { get; set; }
+        public DateTimeOffset JoinedAt { get; set; }
     }
 
     public async Task<bool> DeleteMemberAsync(Guid orgId, Guid teamId, Guid userId)

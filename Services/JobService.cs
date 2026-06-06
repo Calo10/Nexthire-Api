@@ -34,17 +34,36 @@ public class JobService : IJobService
 
     public async Task<JobDto> CreateJobAsync(Guid orgId, Guid createdByUserId, CreateJobDto createJobDto)
     {
+        ValidateLanguage(createJobDto.Language);
         return await _repo.CreateAsync(orgId, createdByUserId, createJobDto);
     }
 
     public async Task<JobDto?> UpdateJobAsync(Guid orgId, Guid id, UpdateJobDto updateJobDto)
     {
+        ValidateLanguage(updateJobDto.Language);
         return await _repo.UpdateAsync(orgId, id, updateJobDto);
     }
 
-    public async Task<bool> DeleteJobAsync(Guid orgId, Guid id)
+    public async Task<(bool Deleted, bool NotFound, bool HasApplications)> DeleteJobAsync(Guid orgId, Guid id)
     {
-        return await _repo.DeleteAsync(orgId, id);
+        var existing = await _repo.GetByIdAsync(orgId, id);
+        if (existing == null)
+            return (false, true, false);
+
+        if (await _repo.HasApplicationsAsync(orgId, id))
+            return (false, false, true);
+
+        var deleted = await _repo.DeleteAsync(orgId, id);
+        return (deleted, !deleted, false);
+    }
+
+    private static void ValidateLanguage(string? language)
+    {
+        if (string.IsNullOrWhiteSpace(language))
+            return;
+
+        if (!JobLanguageCodes.Allowed.Contains(language.Trim()))
+            throw new ArgumentException("language must be 'es' or 'en'.");
     }
 }
 

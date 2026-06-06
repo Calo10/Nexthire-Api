@@ -1,10 +1,14 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Data.SqlClient;
 using nexthire_api.DTOs;
 using nexthire_api.Models.Public;
+using nexthire_api.DTOs.Sourcing;
+using nexthire_api.Helpers;
 using nexthire_api.Repositories;
 using nexthire_api.Services;
+using nexthire_api.Services.Sourcing;
 
 namespace nexthire_api.Controllers;
 
@@ -18,6 +22,8 @@ public class PublicJobsController : ControllerBase
     private readonly IPipelineRepository _pipelineRepo;
     private readonly IApplicationsRepository _applicationsRepo;
     private readonly IResumeDocumentsUploader _resumeDocumentsUploader;
+    private readonly IJobBotQuestionService _jobBotQuestions;
+    private readonly ISourcingService _sourcing;
     private readonly ILogger<PublicJobsController> _logger;
 
     public PublicJobsController(
@@ -26,6 +32,8 @@ public class PublicJobsController : ControllerBase
         IPipelineRepository pipelineRepo,
         IApplicationsRepository applicationsRepo,
         IResumeDocumentsUploader resumeDocumentsUploader,
+        IJobBotQuestionService jobBotQuestions,
+        ISourcingService sourcing,
         ILogger<PublicJobsController> logger)
     {
         _jobService = jobService;
@@ -33,6 +41,8 @@ public class PublicJobsController : ControllerBase
         _pipelineRepo = pipelineRepo;
         _applicationsRepo = applicationsRepo;
         _resumeDocumentsUploader = resumeDocumentsUploader;
+        _jobBotQuestions = jobBotQuestions;
+        _sourcing = sourcing;
         _logger = logger;
     }
 
@@ -63,10 +73,10 @@ public class PublicJobsController : ControllerBase
     /// Public: get a specific job by id and organization (orgId in query).
     /// </summary>
     [HttpGet("{id}")]
-    [ProducesResponseType(typeof(JobDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PublicJobDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<JobDto>> GetPublicJobById(Guid id, [FromQuery] Guid orgId)
+    public async Task<ActionResult<PublicJobDto>> GetPublicJobById(Guid id, [FromQuery] Guid orgId)
     {
         try
         {
@@ -77,7 +87,8 @@ public class PublicJobsController : ControllerBase
             if (job is null)
                 return NotFound(new { message = $"Job with ID {id} not found" });
 
-            return Ok(job);
+            var botQuestions = await _jobBotQuestions.ListAsync(orgId, id, includeInactive: false);
+            return Ok(PublicJobDto.FromJob(job, botQuestions));
         }
         catch (Exception ex)
         {
@@ -95,7 +106,10 @@ public class PublicJobsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public async Task<ActionResult<ApplyJobResponse>> ApplyToJob(Guid jobId, [FromQuery] Guid orgId, [FromForm] ApplyJobFormRequest request)
+    public async Task<ActionResult<ApplyJobResponse>> ApplyToJob(
+        Guid jobId,
+        [FromQuery] Guid orgId,
+        CancellationToken cancellationToken)
     {
         try
         {
@@ -103,22 +117,21 @@ public class PublicJobsController : ControllerBase
                 return BadRequest(new { message = "orgId is required" });
             if (jobId == Guid.Empty)
                 return BadRequest(new { message = "jobId is required" });
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
 
-            // Only allow apply to open jobs (public jobs already enforce open).
+            var (form, parseError) = PublicJobApplyFormParser.Parse(Request.Form, Request.Form.Files);
+            if (parseError is not null)
+                return BadRequest(new { message = parseError });
+            if (form is null || form.Resume is null)
+                return BadRequest(new { message = "Resume or answerFile_{questionId} is required." });
+
             var job = await _jobService.GetPublicOpenJobByIdAsync(orgId, jobId);
             if (job is null)
                 return NotFound(new { message = $"Job with ID {jobId} not found" });
 
-            var emailLower = (request.Email ?? string.Empty).Trim().ToLowerInvariant();
-            if (string.IsNullOrWhiteSpace(emailLower))
-                return BadRequest(new { message = "email is required" });
+            var emailLower = form.Email.Trim().ToLowerInvariant();
+            var botQuestions = await _jobBotQuestions.ListAsync(orgId, jobId, includeInactive: false);
 
-            // Create or reuse candidate (unique by email per org).
             var candidate = await _candidateRepo.GetByEmailAsync(orgId, emailLower);
-
-            // If candidate exists and already has an application for this job, short-circuit BEFORE uploading CV.
             if (candidate is not null)
             {
                 var alreadyApplied = await _applicationsRepo.ExistsForJobCandidateAsync(orgId, jobId, candidate.Id);
@@ -126,40 +139,70 @@ public class PublicJobsController : ControllerBase
                     return Conflict(new { message = "This candidate already has an application for the selected job." });
             }
 
-            // Upload resume only after we know this is a new application attempt.
-            // Store documentId (NOT originalUrl) in candidates.resume_url as requested.
-            var resumeDocumentId = await _resumeDocumentsUploader.UploadResumeAsync(orgId, request.Resume, HttpContext.RequestAborted);
+            string? dynamicAnswersJson;
+            string resumeDocumentId;
+            try
+            {
+                (dynamicAnswersJson, resumeDocumentId) = await PublicJobApplyFormParser.ProcessApplyFilesAsync(
+                    orgId,
+                    form.DynamicAnswersJson,
+                    botQuestions,
+                    form.AnswerFilesByQuestionId,
+                    form.Resume,
+                    _resumeDocumentsUploader,
+                    cancellationToken);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+
+            if (!string.IsNullOrWhiteSpace(dynamicAnswersJson))
+            {
+                await _sourcing.CreateLeadAsync(
+                    orgId,
+                    new CreateSourcingLeadRequestDto
+                    {
+                        JobId = jobId,
+                        SourceTypeCode = form.SourceTypeCode,
+                        FirstName = form.FirstName,
+                        LastName = form.LastName,
+                        FullName = string.IsNullOrWhiteSpace(form.FullName) ? null : form.FullName,
+                        Email = emailLower,
+                        Phone = form.Phone,
+                        ResumeUrl = resumeDocumentId,
+                        DynamicAnswersJson = dynamicAnswersJson,
+                        RawPayloadJson = JsonSerializer.Serialize(new { channel = "public_web", jobId })
+                    });
+            }
 
             if (candidate is null)
             {
-                var created = await _candidateRepo.InsertAsync(
+                candidate = await _candidateRepo.InsertAsync(
                     orgId,
                     new CreateCandidateRequestDto
                     {
-                        FirstName = request.FirstName.Trim(),
-                        LastName = request.LastName.Trim(),
+                        FirstName = form.FirstName,
+                        LastName = form.LastName,
                         Email = emailLower,
-                        Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim(),
-                        Source = string.IsNullOrWhiteSpace(request.Source) ? "public_apply" : request.Source.Trim(),
+                        Phone = form.Phone,
+                        Source = string.IsNullOrWhiteSpace(form.Source) ? "public_apply" : form.Source,
                         ResumeUrl = resumeDocumentId
                     },
                     emailLower);
-
-                candidate = created;
             }
             else
             {
-                // Update candidate with the new resume (and any provided fields).
                 var updated = await _candidateRepo.UpdateAsync(
                     orgId,
                     candidate.Id,
                     new UpdateCandidateRequestDto
                     {
-                        FirstName = request.FirstName.Trim(),
-                        LastName = request.LastName.Trim(),
+                        FirstName = form.FirstName,
+                        LastName = form.LastName,
                         Email = emailLower,
-                        Phone = string.IsNullOrWhiteSpace(request.Phone) ? candidate.Phone : request.Phone.Trim(),
-                        Source = string.IsNullOrWhiteSpace(request.Source) ? candidate.Source : request.Source.Trim(),
+                        Phone = form.Phone ?? candidate.Phone,
+                        Source = string.IsNullOrWhiteSpace(form.Source) ? candidate.Source : form.Source,
                         ResumeUrl = resumeDocumentId
                     },
                     emailLower);
@@ -168,22 +211,27 @@ public class PublicJobsController : ControllerBase
                     candidate = updated;
             }
 
-            // Ensure default pipeline stages exist and use the first stage.
             await _pipelineRepo.EnsureDefaultStagesAsync(orgId);
             var firstStageId = await _pipelineRepo.GetFirstStageIdAsync(orgId);
             if (!firstStageId.HasValue)
                 return StatusCode(500, new { message = "Pipeline stages are not configured for this organization" });
 
-            // Create application (Kanban insert; no stage_history required for public apply).
-            var application = await _applicationsRepo.CreateKanbanAsync(orgId, jobId, candidate.Id, firstStageId.Value, status: "active");
+            var application = await _applicationsRepo.CreateKanbanAsync(
+                orgId,
+                jobId,
+                candidate.Id,
+                firstStageId.Value,
+                status: "active");
 
-            var response = new ApplyJobResponse
+            return StatusCode(StatusCodes.Status201Created, new ApplyJobResponse
             {
                 Candidate = candidate,
                 Application = application
-            };
-
-            return StatusCode(StatusCodes.Status201Created, response);
+            });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("upload", StringComparison.OrdinalIgnoreCase)
                                                    || ex.Message.Contains("Documents function", StringComparison.OrdinalIgnoreCase)

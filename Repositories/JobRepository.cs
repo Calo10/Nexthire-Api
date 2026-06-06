@@ -9,6 +9,17 @@ public class JobRepository : IJobRepository
     private readonly IDbConnectionFactory _connectionFactory;
     private readonly ILogger<JobRepository> _logger;
 
+    private const string JobSelectColumns = @"
+                j.id AS Id,
+                j.title AS Title,
+                j.department AS Department,
+                j.location AS Location,
+                j.description AS Description,
+                j.status AS Status,
+                j.language AS Language,
+                j.created_at AS CreatedAt,
+                j.updated_at AS UpdatedAt";
+
     public JobRepository(IDbConnectionFactory connectionFactory, ILogger<JobRepository> logger)
     {
         _connectionFactory = connectionFactory;
@@ -17,16 +28,9 @@ public class JobRepository : IJobRepository
 
     public async Task<IEnumerable<JobDto>> GetAllAsync(Guid orgId)
     {
-        const string sql = @"
+        var sql = $@"
             SELECT 
-                j.id AS Id,
-                j.title AS Title,
-                j.department AS Department,
-                j.location AS Location,
-                j.description AS Description,
-                j.status AS Status,
-                j.created_at AS CreatedAt,
-                j.updated_at AS UpdatedAt,
+                {JobSelectColumns},
                 (
                     SELECT COUNT(DISTINCT a.candidate_id)
                     FROM applications a
@@ -42,16 +46,9 @@ public class JobRepository : IJobRepository
 
     public async Task<JobDto?> GetByIdAsync(Guid orgId, Guid id)
     {
-        const string sql = @"
+        var sql = $@"
             SELECT 
-                j.id AS Id,
-                j.title AS Title,
-                j.department AS Department,
-                j.location AS Location,
-                j.description AS Description,
-                j.status AS Status,
-                j.created_at AS CreatedAt,
-                j.updated_at AS UpdatedAt,
+                {JobSelectColumns},
                 (
                     SELECT COUNT(DISTINCT a.candidate_id)
                     FROM applications a
@@ -66,16 +63,9 @@ public class JobRepository : IJobRepository
 
     public async Task<IEnumerable<JobDto>> GetPublicOpenAsync(Guid orgId)
     {
-        const string sql = @"
+        var sql = $@"
             SELECT 
-                j.id AS Id,
-                j.title AS Title,
-                j.department AS Department,
-                j.location AS Location,
-                j.description AS Description,
-                j.status AS Status,
-                j.created_at AS CreatedAt,
-                j.updated_at AS UpdatedAt,
+                {JobSelectColumns},
                 (
                     SELECT COUNT(DISTINCT a.candidate_id)
                     FROM applications a
@@ -91,16 +81,9 @@ public class JobRepository : IJobRepository
 
     public async Task<JobDto?> GetPublicOpenByIdAsync(Guid orgId, Guid id)
     {
-        const string sql = @"
+        var sql = $@"
             SELECT 
-                j.id AS Id,
-                j.title AS Title,
-                j.department AS Department,
-                j.location AS Location,
-                j.description AS Description,
-                j.status AS Status,
-                j.created_at AS CreatedAt,
-                j.updated_at AS UpdatedAt,
+                {JobSelectColumns},
                 (
                     SELECT COUNT(DISTINCT a.candidate_id)
                     FROM applications a
@@ -116,16 +99,17 @@ public class JobRepository : IJobRepository
     public async Task<JobDto> CreateAsync(Guid orgId, Guid createdByUserId, CreateJobDto dto)
     {
         const string sql = @"
-            INSERT INTO jobs (id, org_id, created_by_user_id, title, status, department, location, description, created_at, updated_at)
+            INSERT INTO jobs (id, org_id, created_by_user_id, title, status, department, location, description, language, created_at, updated_at)
             OUTPUT INSERTED.id AS Id,
                    INSERTED.title AS Title,
                    INSERTED.department AS Department,
                    INSERTED.location AS Location,
                    INSERTED.description AS Description,
                    INSERTED.status AS Status,
+                   INSERTED.language AS Language,
                    INSERTED.created_at AS CreatedAt,
                    INSERTED.updated_at AS UpdatedAt
-            VALUES (NEWID(), @OrgId, @CreatedByUserId, @Title, COALESCE(@Status, 'Open'), @Department, @Location, @Description, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());";
+            VALUES (NEWID(), @OrgId, @CreatedByUserId, @Title, COALESCE(@Status, 'Open'), @Department, @Location, @Description, @Language, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());";
 
         using var connection = _connectionFactory.CreateConnection();
         return await connection.QuerySingleAsync<JobDto>(sql, new
@@ -136,13 +120,14 @@ public class JobRepository : IJobRepository
             dto.Status,
             dto.Department,
             dto.Location,
-            dto.Description
+            dto.Description,
+            Language = JobLanguageCodes.NormalizeOrDefault(dto.Language)
         });
     }
 
     public async Task<JobDto?> UpdateAsync(Guid orgId, Guid id, UpdateJobDto dto)
     {
-        const string sql = @"
+        var sql = $@"
             UPDATE jobs
             SET
                 title = COALESCE(@Title, title),
@@ -150,18 +135,12 @@ public class JobRepository : IJobRepository
                 location = COALESCE(@Location, location),
                 description = COALESCE(@Description, description),
                 status = COALESCE(@Status, status),
+                language = COALESCE(@Language, language),
                 updated_at = SYSDATETIMEOFFSET()
             WHERE org_id = @OrgId AND id = @Id;
 
             SELECT 
-                j.id AS Id,
-                j.title AS Title,
-                j.department AS Department,
-                j.location AS Location,
-                j.description AS Description,
-                j.status AS Status,
-                j.created_at AS CreatedAt,
-                j.updated_at AS UpdatedAt,
+                {JobSelectColumns},
                 (
                     SELECT COUNT(DISTINCT a.candidate_id)
                     FROM applications a
@@ -182,10 +161,26 @@ public class JobRepository : IJobRepository
                 dto.Department,
                 dto.Location,
                 dto.Description,
-                dto.Status
+                dto.Status,
+                Language = string.IsNullOrWhiteSpace(dto.Language)
+                    ? null
+                    : JobLanguageCodes.NormalizeOrDefault(dto.Language)
             });
 
         return result;
+    }
+
+    public async Task<bool> HasApplicationsAsync(Guid orgId, Guid jobId)
+    {
+        const string sql = @"
+            SELECT CASE WHEN EXISTS (
+                SELECT 1
+                FROM applications a
+                WHERE a.org_id = @orgId AND a.job_id = @jobId
+            ) THEN 1 ELSE 0 END;";
+
+        using var connection = _connectionFactory.CreateConnection();
+        return await connection.ExecuteScalarAsync<int>(sql, new { orgId, jobId }) == 1;
     }
 
     public async Task<bool> DeleteAsync(Guid orgId, Guid id)
@@ -196,4 +191,3 @@ public class JobRepository : IJobRepository
         return affected > 0;
     }
 }
-

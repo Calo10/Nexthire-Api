@@ -1,3 +1,4 @@
+using System.Data.SqlClient;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using nexthire_api.DTOs;
@@ -88,6 +89,10 @@ public class JobsController : ControllerBase
             var job = await _jobService.CreateJobAsync(orgId, userId, createJobDto);
             return CreatedAtAction(nameof(GetJob), new { id = job.Id }, job);
         }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error creating job");
@@ -118,6 +123,10 @@ public class JobsController : ControllerBase
             }
             return Ok(job);
         }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating job {JobId}", id);
@@ -126,9 +135,12 @@ public class JobsController : ControllerBase
     }
 
     /// <summary>
-    /// Delete a job
+    /// Delete a job. Returns 409 if the job has associated applications.
     /// </summary>
     [HttpDelete("{id}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> DeleteJob(Guid id)
     {
         try
@@ -136,17 +148,24 @@ public class JobsController : ControllerBase
             if (!TryGetOrgId(out var orgId, out var unauthorized))
                 return unauthorized!;
 
-            var deleted = await _jobService.DeleteJobAsync(orgId, id);
+            var (deleted, notFound, hasApplications) = await _jobService.DeleteJobAsync(orgId, id);
+            if (notFound)
+                return NotFound(new { message = $"Job with ID {id} not found" });
+            if (hasApplications)
+                return Conflict(new { message = "Cannot delete job because it has associated applications. Archive or remove applications first." });
             if (!deleted)
-            {
-                return NotFound($"Job with ID {id} not found");
-            }
+                return StatusCode(500, new { message = "Unable to delete job" });
+
             return NoContent();
+        }
+        catch (SqlException ex) when (ex.Number == 547)
+        {
+            return Conflict(new { message = "Cannot delete job because it is referenced by other records." });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error deleting job {JobId}", id);
-            return StatusCode(500, "An error occurred while deleting the job");
+            return StatusCode(500, new { message = "An error occurred while deleting the job" });
         }
     }
 

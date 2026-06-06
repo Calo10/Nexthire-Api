@@ -29,11 +29,39 @@ public class ResumeDocumentsUploader : IResumeDocumentsUploader
         if (resume is null || resume.Length <= 0)
             throw new ArgumentException("resume file is required", nameof(resume));
 
+        await using var stream = resume.OpenReadStream();
+        return await UploadResumeAsync(
+            orgId,
+            stream,
+            string.IsNullOrWhiteSpace(resume.FileName) ? "resume" : resume.FileName,
+            resume.ContentType,
+            resume.Length,
+            cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<string> UploadResumeAsync(
+        Guid orgId,
+        Stream content,
+        string fileName,
+        string? contentType,
+        long length,
+        CancellationToken cancellationToken = default)
+    {
+        if (content is null || !content.CanRead)
+            throw new ArgumentException("resume stream is required", nameof(content));
+
+        if (length <= 0)
+            throw new ArgumentException("resume file is required", nameof(length));
+
         const long maxBytes = 10 * 1024 * 1024; // 10 MB
-        if (resume.Length > maxBytes)
+        if (length > maxBytes)
             throw new InvalidOperationException("resume file is too large (max 10MB)");
 
-        var ext = Path.GetExtension(resume.FileName ?? string.Empty).ToLowerInvariant();
+        var ext = Path.GetExtension(fileName).ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(ext))
+            ext = ExtensionFromContentType(contentType ?? string.Empty) ?? string.Empty;
+
         var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".pdf", ".doc", ".docx" };
         if (string.IsNullOrWhiteSpace(ext) || !allowed.Contains(ext))
             throw new InvalidOperationException("resume file type not allowed (pdf, doc, docx)");
@@ -48,22 +76,25 @@ public class ResumeDocumentsUploader : IResumeDocumentsUploader
 
         var functionKey = ResolveDocumentsFunctionKey(_configuration);
         var uploadUri = BuildDocumentsUploadUri(baseUrl, orgId, functionKey);
+        var resolvedFileName = string.IsNullOrWhiteSpace(Path.GetFileName(fileName))
+            ? "resume" + ext
+            : Path.GetFileName(fileName);
 
         _logger.LogInformation(
-            "Uploading resume to documents function. OrgId={OrgId}, HasFunctionKey={HasFunctionKey}, Url={Url}",
+            "[WhatsAppResume] Documents POST OrgId={OrgId} HasFunctionKey={HasFunctionKey} Url={Url} FileName={FileName} Bytes={Bytes}",
             orgId,
             !string.IsNullOrWhiteSpace(functionKey),
-            RedactSecrets(uploadUri.ToString()));
+            RedactSecrets(uploadUri.ToString()),
+            resolvedFileName,
+            length);
 
         using var client = _httpClientFactory.CreateClient("Documents");
-        var fileName = string.IsNullOrWhiteSpace(resume.FileName) ? "resume" + ext : resume.FileName;
 
         using var form = new MultipartFormDataContent();
-        await using var stream = resume.OpenReadStream();
-        using var fileContent = new StreamContent(stream);
+        using var fileContent = new StreamContent(content);
         fileContent.Headers.ContentType = new MediaTypeHeaderValue(
-            string.IsNullOrWhiteSpace(resume.ContentType) ? "application/octet-stream" : resume.ContentType);
-        form.Add(fileContent, "file", fileName);
+            string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType);
+        form.Add(fileContent, "file", resolvedFileName);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, uploadUri) { Content = form };
         if (!string.IsNullOrWhiteSpace(functionKey))
@@ -78,11 +109,16 @@ public class ResumeDocumentsUploader : IResumeDocumentsUploader
             if (string.IsNullOrWhiteSpace(documentId))
                 throw new InvalidOperationException("Documents function response missing documentId");
 
+            _logger.LogInformation(
+                "[WhatsAppResume] Documents upload OK OrgId={OrgId} DocumentId={DocumentId}",
+                orgId,
+                documentId);
+
             return documentId;
         }
 
         _logger.LogWarning(
-            "Documents function upload failed. Url: {Url} (base {BaseUrl}). HasFunctionKey={HasFunctionKey}. Status: {StatusCode}. Body: {Body}",
+            "[WhatsAppResume] Documents upload FAILED Url: {Url} (base {BaseUrl}). HasFunctionKey={HasFunctionKey}. Status: {StatusCode}. Body: {Body}",
             RedactSecrets(uploadUri.ToString()),
             RedactSecrets(baseUrl),
             !string.IsNullOrWhiteSpace(functionKey),
@@ -99,10 +135,14 @@ public class ResumeDocumentsUploader : IResumeDocumentsUploader
 
         if ((int)resp.StatusCode == 404)
         {
+            var portHint = baseUrl.Contains(":7071", StringComparison.OrdinalIgnoreCase)
+                ? " Port 7071 is often nexa-messenger locally; run nexa-documents on http://localhost:7072 (func start --port 7072) or use https://nexa-documents-function.azurewebsites.net."
+                : string.Empty;
+
             throw new InvalidOperationException(
                 "Failed to upload resume document (documents endpoint not found). " +
                 $"Verify DOCUMENTS_FUNCTION_BASE_URL points to the documents Azure Function App " +
-                $"(expected POST /api/NextHire/{{orgId}}/documents). Configured base: {RedactSecrets(baseUrl)}.");
+                $"(expected POST /api/NextHire/{{orgId}}/documents). Configured base: {RedactSecrets(baseUrl)}.{portHint}");
         }
 
         throw new InvalidOperationException($"Failed to upload resume document (status {(int)resp.StatusCode}).");
@@ -148,16 +188,27 @@ public class ResumeDocumentsUploader : IResumeDocumentsUploader
         return string.IsNullOrWhiteSpace(key) ? null : key;
     }
 
-    internal static Uri BuildDocumentsUploadUri(string baseUrl, Guid orgId, string? functionKey)
+    internal static Uri BuildDocumentsUploadUri(string baseUrl, Guid orgId, string? functionKey) =>
+        BuildDocumentsUri(baseUrl, $"{orgId}/documents", functionKey);
+
+    internal static Uri BuildDocumentsUri(string baseUrl, string pathAfterNextHire, string? functionKey)
     {
         var trimmed = baseUrl.TrimEnd('/');
         var withApi = trimmed.EndsWith("/api", StringComparison.OrdinalIgnoreCase) ? trimmed : $"{trimmed}/api";
-        var builder = new UriBuilder($"{withApi}/NextHire/{orgId}/documents");
+        var builder = new UriBuilder($"{withApi}/NextHire/{pathAfterNextHire.TrimStart('/')}");
 
         if (!string.IsNullOrWhiteSpace(functionKey))
             builder.Query = $"code={Uri.EscapeDataString(functionKey)}";
 
         return builder.Uri;
+    }
+
+    internal static void ApplyDocumentsFunctionAuth(HttpRequestMessage request, string? functionKey)
+    {
+        if (string.IsNullOrWhiteSpace(functionKey))
+            return;
+
+        request.Headers.TryAddWithoutValidation(FunctionKeyHeaderName, functionKey);
     }
 
     private static string RedactSecrets(string value)
@@ -173,6 +224,15 @@ public class ResumeDocumentsUploader : IResumeDocumentsUploader
 
         return redacted;
     }
+
+    private static string? ExtensionFromContentType(string contentType) =>
+        contentType.Trim().ToLowerInvariant() switch
+        {
+            "application/pdf" => ".pdf",
+            "application/msword" => ".doc",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document" => ".docx",
+            _ => null
+        };
 
     private string? ExtractDocumentIdOrNull(string raw)
     {
