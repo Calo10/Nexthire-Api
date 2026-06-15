@@ -26,6 +26,7 @@ public interface INexaClient
         string timezone,
         string adminEmail,
         string? adminFullName,
+        string? adminPassword = null,
         CancellationToken cancellationToken = default);
 }
 
@@ -797,6 +798,7 @@ public class NexaClient : INexaClient
         string timezone,
         string adminEmail,
         string? adminFullName,
+        string? adminPassword = null,
         CancellationToken cancellationToken = default)
     {
         var provisioningApiKey = _configuration["Provisioning:ApiKey"]?.Trim();
@@ -811,7 +813,8 @@ public class NexaClient : INexaClient
                 name,
                 timezone,
                 adminEmail,
-                adminFullName
+                adminFullName,
+                adminPassword
             })
         };
         requestMessage.Headers.Add("X-Api-Key", provisioningApiKey);
