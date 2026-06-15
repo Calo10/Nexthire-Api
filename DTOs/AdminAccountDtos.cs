@@ -21,6 +21,9 @@ public class CreateAdminAccountRequestDto
     public string? FullName { get; set; }
 
     public string Timezone { get; set; } = "America/Costa_Rica";
+
+    /// <summary>If set, adds the user to this existing organization instead of creating a new one.</summary>
+    public Guid? OrgId { get; set; }
 }
 
 public class CreateAdminAccountResponseDto

@@ -28,6 +28,13 @@ public interface INexaClient
         string? adminFullName,
         string? adminPassword = null,
         CancellationToken cancellationToken = default);
+    Task<NexaProvisionOrganizationResponse> ProvisionOrganizationMemberAsync(
+        Guid orgId,
+        string email,
+        string? fullName,
+        string password,
+        string role = "admin",
+        CancellationToken cancellationToken = default);
 }
 
 public class NexaClient : INexaClient
@@ -839,6 +846,56 @@ public class NexaClient : INexaClient
 
         _logger.LogInformation(
             "Nexa org provisioned. OrgId={OrgId} AdminUserId={AdminUserId} AdminCreated={AdminCreated}",
+            result.OrganizationId, result.AdminUserId, result.AdminUserCreated);
+
+        return result;
+    }
+
+    public async Task<NexaProvisionOrganizationResponse> ProvisionOrganizationMemberAsync(
+        Guid orgId,
+        string email,
+        string? fullName,
+        string password,
+        string role = "admin",
+        CancellationToken cancellationToken = default)
+    {
+        var provisioningApiKey = _configuration["Provisioning:ApiKey"]?.Trim();
+        if (string.IsNullOrWhiteSpace(provisioningApiKey))
+            throw new InvalidOperationException("Provisioning:ApiKey is not configured.");
+
+        var requestUrl = $"/v1/orgs/{orgId:D}/members/provision";
+        var requestMessage = new HttpRequestMessage(HttpMethod.Post, requestUrl)
+        {
+            Content = JsonContent.Create(new
+            {
+                email,
+                fullName,
+                password,
+                role
+            })
+        };
+        requestMessage.Headers.Add("X-Api-Key", provisioningApiKey);
+
+        var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
+        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning(
+                "Nexa provision member failed. OrgId={OrgId} Status={Status} BodyLength={Length}",
+                orgId, response.StatusCode, responseContent.Length);
+
+            var ex = new HttpRequestException($"Nexa API returned error: {response.StatusCode}");
+            ex.Data["StatusCode"] = response.StatusCode;
+            ex.Data["ErrorBody"] = responseContent;
+            throw ex;
+        }
+
+        var result = JsonSerializer.Deserialize<NexaProvisionOrganizationResponse>(responseContent, JsonOptions)
+                     ?? throw new InvalidOperationException("Empty Nexa provision member response");
+
+        _logger.LogInformation(
+            "Nexa member provisioned. OrgId={OrgId} UserId={UserId} UserCreated={UserCreated}",
             result.OrganizationId, result.AdminUserId, result.AdminUserCreated);
 
         return result;
