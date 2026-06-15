@@ -25,7 +25,7 @@ public class AdminAccountsController : ControllerBase
     }
 
     /// <summary>
-    /// Creates an organization and admin user with email/password (protected by secretKey).
+    /// Creates an admin user with email/password. Pass orgId to add to an existing org; omit it to create a new org.
     /// </summary>
     [HttpPost("accounts")]
     [ProducesResponseType(typeof(CreateAdminAccountResponseDto), StatusCodes.Status201Created)]

@@ -37,22 +37,35 @@ public class AdminAccountService : IAdminAccountService
 
         var email = request.Email.Trim().ToLowerInvariant();
         var password = request.Password;
-        var orgName = ResolveOrgName(request.OrgName, email);
-        var timezone = string.IsNullOrWhiteSpace(request.Timezone)
-            ? "America/Costa_Rica"
-            : request.Timezone.Trim();
         var fullName = string.IsNullOrWhiteSpace(request.FullName) ? null : request.FullName.Trim();
 
         NexaProvisionOrganizationResponse nexa;
         try
         {
-            nexa = await _nexa.ProvisionOrganizationAsync(
-                orgName,
-                timezone,
-                email,
-                fullName,
-                password,
-                cancellationToken);
+            if (request.OrgId is Guid orgId && orgId != Guid.Empty)
+            {
+                nexa = await _nexa.ProvisionOrganizationMemberAsync(
+                    orgId,
+                    email,
+                    fullName,
+                    password,
+                    cancellationToken: cancellationToken);
+            }
+            else
+            {
+                var orgName = ResolveOrgName(request.OrgName, email);
+                var timezone = string.IsNullOrWhiteSpace(request.Timezone)
+                    ? "America/Costa_Rica"
+                    : request.Timezone.Trim();
+
+                nexa = await _nexa.ProvisionOrganizationAsync(
+                    orgName,
+                    timezone,
+                    email,
+                    fullName,
+                    password,
+                    cancellationToken);
+            }
         }
         catch (HttpRequestException ex) when (ex.Data.Contains("StatusCode"))
         {
