@@ -40,7 +40,7 @@ public class OrgProvisioningService : IOrgProvisioningService
         NexaProvisionOrganizationResponse nexa;
         try
         {
-            nexa = await _nexa.ProvisionOrganizationAsync(name, timezone, email, fullName, cancellationToken);
+            nexa = await _nexa.ProvisionOrganizationAsync(name, timezone, email, fullName, null, cancellationToken);
         }
         catch (HttpRequestException ex) when (ex.Data.Contains("StatusCode"))
         {

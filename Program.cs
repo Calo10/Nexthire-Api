@@ -194,6 +194,7 @@ builder.Services.AddAuthorization(options =>
 // Add custom services
 builder.Services.AddScoped<IOrgUserService, OrgUserService>();
 builder.Services.AddScoped<IOrgProvisioningService, OrgProvisioningService>();
+builder.Services.AddScoped<IAdminAccountService, AdminAccountService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<INexaAccessTokenResolver, NexaAccessTokenResolver>();
 builder.Services.AddScoped<IJobService, JobService>();
