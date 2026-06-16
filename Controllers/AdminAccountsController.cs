@@ -57,10 +57,19 @@ public class AdminAccountsController : ControllerBase
             _logger.LogError(ex, "Admin account bootstrap configuration error");
             return StatusCode(503, new { message = ex.Message });
         }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "Nexa HTTP error creating admin account");
+            return StatusCode(502, new { message = ex.Message });
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error creating admin account");
-            return StatusCode(500, new { message = "An error occurred while creating the admin account." });
+            return StatusCode(500, new
+            {
+                message = "An error occurred while creating the admin account.",
+                detail = ex.Message
+            });
         }
     }
 }

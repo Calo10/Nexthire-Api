@@ -841,8 +841,9 @@ public class NexaClient : INexaClient
             throw ex;
         }
 
-        var result = JsonSerializer.Deserialize<NexaProvisionOrganizationResponse>(responseContent, JsonOptions)
-                     ?? throw new InvalidOperationException("Empty Nexa provision response");
+        var result = TryDeserializeProvisionResponse(responseContent)
+                     ?? throw new InvalidOperationException(
+                         $"Empty or invalid Nexa provision response: {Truncate(responseContent, 400)}");
 
         _logger.LogInformation(
             "Nexa org provisioned. OrgId={OrgId} AdminUserId={AdminUserId} AdminCreated={AdminCreated}",
@@ -891,8 +892,9 @@ public class NexaClient : INexaClient
             throw ex;
         }
 
-        var result = JsonSerializer.Deserialize<NexaProvisionOrganizationResponse>(responseContent, JsonOptions)
-                     ?? throw new InvalidOperationException("Empty Nexa provision member response");
+        var result = TryDeserializeProvisionResponse(responseContent)
+                     ?? throw new InvalidOperationException(
+                         $"Empty or invalid Nexa provision member response: {Truncate(responseContent, 400)}");
 
         _logger.LogInformation(
             "Nexa member provisioned. OrgId={OrgId} UserId={UserId} UserCreated={UserCreated}",
@@ -900,6 +902,24 @@ public class NexaClient : INexaClient
 
         return result;
     }
+
+    private static NexaProvisionOrganizationResponse? TryDeserializeProvisionResponse(string responseContent)
+    {
+        if (string.IsNullOrWhiteSpace(responseContent))
+            return null;
+
+        try
+        {
+            return JsonSerializer.Deserialize<NexaProvisionOrganizationResponse>(responseContent, JsonOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string Truncate(string value, int maxLength) =>
+        value.Length <= maxLength ? value : value[..maxLength];
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {

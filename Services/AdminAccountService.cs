@@ -67,7 +67,7 @@ public class AdminAccountService : IAdminAccountService
                     cancellationToken);
             }
         }
-        catch (HttpRequestException ex) when (ex.Data.Contains("StatusCode"))
+        catch (HttpRequestException ex)
         {
             throw MapNexaException(ex);
         }
@@ -131,7 +131,10 @@ public class AdminAccountService : IAdminAccountService
     private static Exception MapNexaException(HttpRequestException ex)
     {
         if (!ex.Data.Contains("StatusCode") || ex.Data["StatusCode"] is not System.Net.HttpStatusCode status)
-            return ex;
+        {
+            return new InvalidOperationException(
+                "Unable to reach Nexa. Verify Nexa:BaseUrl and that nexa-api is running.", ex);
+        }
 
         var body = ex.Data["ErrorBody"]?.ToString();
         var message = TryExtractError(body) ?? $"Nexa returned {(int)status}.";
@@ -139,9 +142,13 @@ public class AdminAccountService : IAdminAccountService
         return status switch
         {
             System.Net.HttpStatusCode.Unauthorized =>
-                new InvalidOperationException("Nexa rejected the provisioning API key."),
+                new InvalidOperationException(
+                    "Nexa rejected the provisioning API key. Ensure Provisioning:ApiKey matches in nexthire-api and nexa-api."),
             System.Net.HttpStatusCode.BadRequest => new ArgumentException(message),
-            _ => ex
+            System.Net.HttpStatusCode.NotFound =>
+                new InvalidOperationException(
+                    "Nexa endpoint POST /v1/orgs/{orgId}/members/provision was not found. Deploy nexa-api commit with 'Add existing org'."),
+            _ => new InvalidOperationException(message, ex)
         };
     }
 
