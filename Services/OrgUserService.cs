@@ -54,10 +54,13 @@ public class OrgUserService : IOrgUserService
         {
             members = await _nexa.ListOrgMembersAsync(orgId, nexaToken, cancellationToken);
         }
-        catch (HttpRequestException ex) when (ex.Data["StatusCode"] is System.Net.HttpStatusCode.Unauthorized
-                                              or System.Net.HttpStatusCode.Forbidden)
+        catch (HttpRequestException ex)
         {
-            _logger.LogWarning(ex, "Nexa rejected org members sync for org {OrgId}; returning local nh_users", orgId);
+            _logger.LogWarning(
+                ex,
+                "Nexa org members sync failed for org {OrgId} (Status={Status}); returning local nh_users",
+                orgId,
+                ex.Data["StatusCode"]);
             return await _users.ListByOrgAsync(orgId);
         }
 
@@ -78,17 +81,41 @@ public class OrgUserService : IOrgUserService
 
         foreach (var member in members)
         {
-            await _users.UpsertFromNexaMemberAsync(orgId, member.UserId, member.Email, member.FullName);
+            try
+            {
+                await _users.UpsertFromNexaMemberAsync(orgId, member.UserId, member.Email, member.FullName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Failed to upsert nh_users for Nexa member {UserId} in org {OrgId}",
+                    member.UserId,
+                    orgId);
+            }
         }
 
         foreach (var invite in pendingInvites)
         {
-            var email = invite.Email.Trim().ToLowerInvariant();
-            await _users.UpsertPendingByEmailAsync(orgId, email, null, null, null);
+            try
+            {
+                var email = invite.Email.Trim().ToLowerInvariant();
+                await _users.UpsertPendingByEmailAsync(orgId, email, null, null, null);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Failed to upsert pending nh_users for invite {Email} in org {OrgId}",
+                    invite.Email,
+                    orgId);
+            }
         }
 
         var users = await _users.ListByOrgAsync(orgId);
-        var memberByNexaId = members.ToDictionary(m => m.UserId);
+        var memberByNexaId = members
+            .GroupBy(m => m.UserId)
+            .ToDictionary(g => g.Key, g => g.First());
         var memberByEmail = members
             .GroupBy(m => m.Email.Trim().ToLowerInvariant())
             .ToDictionary(g => g.Key, g => g.First());

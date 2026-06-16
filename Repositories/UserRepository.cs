@@ -157,6 +157,18 @@ public class UserRepository : IUserRepository
             }
         }
 
+        if (schema.HasNexaUserId)
+        {
+            var globalId = await connection.ExecuteScalarAsync<Guid?>(
+                "SELECT TOP 1 id FROM nh_users WHERE nexa_user_id = @nexaUserId;",
+                new { nexaUserId });
+            if (globalId.HasValue)
+            {
+                await ExecuteUpdateAsync(connection, schema, globalId.Value, orgId, nexaUserId, email, firstName, lastName, displayName, null);
+                return globalId.Value;
+            }
+        }
+
         return await InsertUserAsync(orgId, nexaUserId, email, firstName, lastName, displayName, null);
     }
 
@@ -349,6 +361,11 @@ public class UserRepository : IUserRepository
             parameters.Add("phone", string.IsNullOrWhiteSpace(phone) ? null : phone.Trim());
         }
 
+        if (schema.HasOrgId)
+        {
+            sets.Add("org_id = @orgId");
+        }
+
         if (schema.HasUpdatedAt)
         {
             sets.Add("updated_at = TODATETIMEOFFSET(SYSUTCDATETIME(), '+00:00')");
@@ -357,7 +374,7 @@ public class UserRepository : IUserRepository
         if (sets.Count == 0)
             return;
 
-        var sql = $"UPDATE nh_users SET {string.Join(", ", sets)} WHERE id = @id AND org_id = @orgId;";
+        var sql = $"UPDATE nh_users SET {string.Join(", ", sets)} WHERE id = @id;";
         await connection.ExecuteAsync(sql, parameters);
     }
 
@@ -436,6 +453,19 @@ public class UserRepository : IUserRepository
         return schema;
     }
 
+    private static async Task<UserRolesSchema> GetUserRolesSchemaAsync(IDbConnection connection)
+    {
+        const string sql = @"
+            SELECT LOWER(COLUMN_NAME) AS ColumnName
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'user_roles';";
+
+        var cols = (await connection.QueryAsync<string>(sql)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return new UserRolesSchema(HasCreatedAt: cols.Contains("created_at"));
+    }
+
+    private sealed record UserRolesSchema(bool HasCreatedAt);
+
     private static async Task<IReadOnlyList<OrgUserDto>> AttachRolesAsync(
         IDbConnection connection,
         Guid orgId,
@@ -457,13 +487,18 @@ public class UserRepository : IUserRepository
         }
 
         var userIds = rows.Select(r => r.Id).ToList();
-        const string rolesSql = @"
+        var urSchema = await GetUserRolesSchemaAsync(connection);
+        var assignedAt = urSchema.HasCreatedAt
+            ? "ur.created_at AS AssignedAt"
+            : "TODATETIMEOFFSET(SYSUTCDATETIME(), '+00:00') AS AssignedAt";
+
+        var rolesSql = $@"
             SELECT
                 ur.user_id AS UserId,
                 ur.role_id AS RoleId,
                 r.code AS RoleCode,
                 r.name AS RoleName,
-                ur.created_at AS AssignedAt
+                {assignedAt}
             FROM user_roles ur
             INNER JOIN roles r ON r.id = ur.role_id AND r.org_id = @orgId
             WHERE ur.org_id = @orgId AND ur.user_id IN @userIds;";
