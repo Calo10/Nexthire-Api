@@ -45,7 +45,11 @@ public class OrgUsersController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error listing org users");
-            return StatusCode(500, new { message = "An error occurred while retrieving users." });
+            return StatusCode(500, new
+            {
+                message = "An error occurred while retrieving users.",
+                detail = ex.Message
+            });
         }
     }
 
