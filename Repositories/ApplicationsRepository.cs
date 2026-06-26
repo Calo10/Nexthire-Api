@@ -9,11 +9,16 @@ namespace nexthire_api.Repositories;
 public class ApplicationsRepository : IApplicationsRepository
 {
     private readonly IDbConnectionFactory _connectionFactory;
+    private readonly IUserRepository _users;
     private readonly ILogger<ApplicationsRepository> _logger;
 
-    public ApplicationsRepository(IDbConnectionFactory connectionFactory, ILogger<ApplicationsRepository> logger)
+    public ApplicationsRepository(
+        IDbConnectionFactory connectionFactory,
+        IUserRepository users,
+        ILogger<ApplicationsRepository> logger)
     {
         _connectionFactory = connectionFactory;
+        _users = users;
         _logger = logger;
     }
 
@@ -192,195 +197,11 @@ public class ApplicationsRepository : IApplicationsRepository
 
     public async Task<Guid> GetOrCreateNhUserIdAsync(Guid orgId, Guid nexaUserId, string? email, string? displayName)
     {
-        using var connection = _connectionFactory.CreateConnection();
+        var safeEmail = string.IsNullOrWhiteSpace(email)
+            ? $"{nexaUserId}@unknown.local"
+            : email.Trim();
 
-        var schema = await GetNhUsersSchemaAsync(connection);
-
-        // Resolve lookup strategy based on available columns.
-        var whereClauses = new List<string>();
-        var parameters = new DynamicParameters();
-
-        if (schema.HasOrgId)
-        {
-            whereClauses.Add("org_id = @orgId");
-            parameters.Add("orgId", orgId);
-        }
-
-        if (schema.HasNexaUserId)
-        {
-            whereClauses.Add("nexa_user_id = @nexaUserId");
-            parameters.Add("nexaUserId", nexaUserId);
-        }
-        else if (schema.HasEmail)
-        {
-            var safeEmailLookup = string.IsNullOrWhiteSpace(email) ? null : email;
-            if (!string.IsNullOrWhiteSpace(safeEmailLookup))
-            {
-                whereClauses.Add("email = @email");
-                parameters.Add("email", safeEmailLookup);
-            }
-        }
-
-        if (whereClauses.Count > 0)
-        {
-            var selectSql = $@"
-                SELECT TOP 1 id
-                FROM nh_users
-                WHERE {string.Join(" AND ", whereClauses)};";
-
-            var existing = await connection.ExecuteScalarAsync<Guid?>(selectSql, parameters);
-            if (existing.HasValue)
-                return existing.Value;
-        }
-
-        // Build an insert using only the columns that exist in THIS DB.
-        // This avoids runtime failures when columns differ across environments.
-        var id = Guid.NewGuid();
-
-        var safeEmail = string.IsNullOrWhiteSpace(email) ? $"{nexaUserId}@unknown.local" : email!;
-        var safeDisplayName = string.IsNullOrWhiteSpace(displayName) ? safeEmail : displayName!;
-
-        var firstName = "User";
-        var lastName = "";
-        if (!string.IsNullOrWhiteSpace(displayName))
-        {
-            var parts = displayName.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length >= 1) firstName = parts[0];
-            if (parts.Length == 2) lastName = parts[1];
-        }
-
-        var insertColumns = new List<string>();
-        var insertValues = new List<string>();
-        var insertParams = new DynamicParameters();
-
-        // Prefer explicit id if supported (typical for uniqueidentifier PK).
-        insertColumns.Add("id");
-        insertValues.Add("@id");
-        insertParams.Add("id", id);
-
-        if (schema.HasOrgId)
-        {
-            insertColumns.Add("org_id");
-            insertValues.Add("@orgId");
-            insertParams.Add("orgId", orgId);
-        }
-
-        if (schema.HasNexaUserId)
-        {
-            insertColumns.Add("nexa_user_id");
-            insertValues.Add("@nexaUserId");
-            insertParams.Add("nexaUserId", nexaUserId);
-        }
-
-        if (schema.HasEmail)
-        {
-            insertColumns.Add("email");
-            insertValues.Add("@email");
-            insertParams.Add("email", safeEmail);
-        }
-
-        if (schema.HasDisplayName)
-        {
-            insertColumns.Add("display_name");
-            insertValues.Add("@displayName");
-            insertParams.Add("displayName", safeDisplayName);
-        }
-        else
-        {
-            if (schema.HasFirstName)
-            {
-                insertColumns.Add("first_name");
-                insertValues.Add("@firstName");
-                insertParams.Add("firstName", firstName);
-            }
-            if (schema.HasLastName)
-            {
-                insertColumns.Add("last_name");
-                insertValues.Add("@lastName");
-                insertParams.Add("lastName", lastName);
-            }
-        }
-
-        if (schema.HasCreatedAt)
-        {
-            insertColumns.Add("created_at");
-            insertValues.Add("TODATETIMEOFFSET(SYSUTCDATETIME(), '+00:00')");
-        }
-
-        if (schema.HasUpdatedAt)
-        {
-            insertColumns.Add("updated_at");
-            insertValues.Add("TODATETIMEOFFSET(SYSUTCDATETIME(), '+00:00')");
-        }
-
-        var insertSql = $@"
-            INSERT INTO nh_users ({string.Join(", ", insertColumns)})
-            VALUES ({string.Join(", ", insertValues)});";
-
-        try
-        {
-            await connection.ExecuteAsync(insertSql, insertParams);
-            return id;
-        }
-        catch (SqlException)
-        {
-            // In case id is identity/managed differently, retry without explicit id.
-            insertColumns.Remove("id");
-            insertValues.Remove("@id");
-
-            var retrySql = $@"
-                INSERT INTO nh_users ({string.Join(", ", insertColumns)})
-                VALUES ({string.Join(", ", insertValues)});";
-
-            var retryParams = new DynamicParameters(insertParams);
-            // Dapper's DynamicParameters.Remove is not always available across versions; just don't pass "id".
-
-            await connection.ExecuteAsync(retrySql, retryParams);
-
-            // Best-effort reselect (by nexa_user_id/org_id if available, else email)
-            var reselectWhere = new List<string>();
-            var reselectParams = new DynamicParameters();
-            if (schema.HasOrgId) { reselectWhere.Add("org_id = @orgId"); reselectParams.Add("orgId", orgId); }
-            if (schema.HasNexaUserId) { reselectWhere.Add("nexa_user_id = @nexaUserId"); reselectParams.Add("nexaUserId", nexaUserId); }
-            else if (schema.HasEmail) { reselectWhere.Add("email = @email"); reselectParams.Add("email", safeEmail); }
-
-            if (reselectWhere.Count == 0)
-                return nexaUserId;
-
-            var reselectSql = $@"SELECT TOP 1 id FROM nh_users WHERE {string.Join(" AND ", reselectWhere)};";
-            var newId = await connection.ExecuteScalarAsync<Guid?>(reselectSql, reselectParams);
-            return newId ?? nexaUserId;
-        }
-    }
-
-    private sealed record NhUsersSchema(
-        bool HasOrgId,
-        bool HasNexaUserId,
-        bool HasEmail,
-        bool HasDisplayName,
-        bool HasFirstName,
-        bool HasLastName,
-        bool HasCreatedAt,
-        bool HasUpdatedAt);
-
-    private async Task<NhUsersSchema> GetNhUsersSchemaAsync(IDbConnection connection)
-    {
-        const string sql = @"
-            SELECT LOWER(COLUMN_NAME) AS ColumnName
-            FROM INFORMATION_SCHEMA.COLUMNS
-            WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'nh_users';";
-
-        var cols = (await connection.QueryAsync<string>(sql)).ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        return new NhUsersSchema(
-            HasOrgId: cols.Contains("org_id"),
-            HasNexaUserId: cols.Contains("nexa_user_id"),
-            HasEmail: cols.Contains("email"),
-            HasDisplayName: cols.Contains("display_name"),
-            HasFirstName: cols.Contains("first_name"),
-            HasLastName: cols.Contains("last_name"),
-            HasCreatedAt: cols.Contains("created_at"),
-            HasUpdatedAt: cols.Contains("updated_at"));
+        return await _users.UpsertFromNexaMemberAsync(orgId, nexaUserId, safeEmail, displayName);
     }
 
     public async Task<ApplicationListItemDto> CreateAsync(Guid orgId, CreateApplicationRequestDto request)
