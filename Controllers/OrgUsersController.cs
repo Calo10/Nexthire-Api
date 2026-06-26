@@ -35,7 +35,9 @@ public class OrgUsersController : ControllerBase
         {
             var orgId = ClaimUtils.RequireOrgId(User);
             var nexaUserId = ClaimUtils.RequireNexaUserId(User).ToString();
+            _logger.LogInformation("Listing org users for org {OrgId}", orgId);
             var users = await _orgUsers.ListAsync(orgId, nexaUserId, cancellationToken);
+            _logger.LogInformation("Listed {Count} org users for org {OrgId}", users.Count, orgId);
             return Ok(users);
         }
         catch (UnauthorizedAccessException ex)
