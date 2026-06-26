@@ -193,6 +193,8 @@ builder.Services.AddAuthorization(options =>
 
 // Add custom services
 builder.Services.AddScoped<IOrgUserService, OrgUserService>();
+builder.Services.AddScoped<IOrgMembershipAuthorizationService, OrgMembershipAuthorizationService>();
+builder.Services.AddScoped<IOrganizationSettingsService, OrganizationSettingsService>();
 builder.Services.AddScoped<IOrgProvisioningService, OrgProvisioningService>();
 builder.Services.AddScoped<IAdminAccountService, AdminAccountService>();
 builder.Services.AddHttpContextAccessor();
@@ -226,6 +228,7 @@ builder.Services.AddScoped<INotesRepository, NotesRepository>();
 builder.Services.AddScoped<IApplicationsRepository, ApplicationsRepository>();
 builder.Services.AddScoped<IPipelineRepository, PipelineRepository>();
 builder.Services.AddScoped<ITemplatesRepository, TemplatesRepository>();
+builder.Services.AddScoped<IOrganizationSettingsRepository, OrganizationSettingsRepository>();
 builder.Services.AddScoped<ISourcingRepository, SourcingRepository>();
 builder.Services.AddScoped<IWhatsAppInboundRepository, WhatsAppInboundRepository>();
 builder.Services.AddScoped<ISourcingService, SourcingService>();

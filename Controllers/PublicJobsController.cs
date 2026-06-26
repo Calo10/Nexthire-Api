@@ -121,8 +121,8 @@ public class PublicJobsController : ControllerBase
             var (form, parseError) = PublicJobApplyFormParser.Parse(Request.Form, Request.Form.Files);
             if (parseError is not null)
                 return BadRequest(new { message = parseError });
-            if (form is null || form.Resume is null)
-                return BadRequest(new { message = "Resume or answerFile_{questionId} is required." });
+            if (form is null)
+                return BadRequest(new { message = "Invalid apply form." });
 
             var job = await _jobService.GetPublicOpenJobByIdAsync(orgId, jobId);
             if (job is null)
@@ -130,6 +130,14 @@ public class PublicJobsController : ControllerBase
 
             var emailLower = form.Email.Trim().ToLowerInvariant();
             var botQuestions = await _jobBotQuestions.ListAsync(orgId, jobId, includeInactive: false);
+
+            var answersError = PublicJobApplyFormParser.ValidateRequiredQuestionAnswers(
+                botQuestions,
+                form.DynamicAnswersJson,
+                form.Resume,
+                form.AnswerFilesByQuestionId);
+            if (answersError is not null)
+                return BadRequest(new { message = answersError });
 
             var candidate = await _candidateRepo.GetByEmailAsync(orgId, emailLower);
             if (candidate is not null)
@@ -140,7 +148,7 @@ public class PublicJobsController : ControllerBase
             }
 
             string? dynamicAnswersJson;
-            string resumeDocumentId;
+            string? resumeDocumentId;
             try
             {
                 (dynamicAnswersJson, resumeDocumentId) = await PublicJobApplyFormParser.ProcessApplyFilesAsync(

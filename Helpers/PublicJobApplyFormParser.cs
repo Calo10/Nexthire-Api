@@ -49,9 +49,6 @@ public static class PublicJobApplyFormParser
         var resume = FindResumeFile(files);
         var answerFiles = FindAnswerFiles(files);
 
-        if (resume is null && answerFiles.Count == 0)
-            return (null, "Resume or answerFile_{questionId} is required.");
-
         return (new PublicJobApplyFormData
         {
             FirstName = firstName.Trim(),
@@ -61,9 +58,65 @@ public static class PublicJobApplyFormParser
             Source = string.IsNullOrWhiteSpace(source) ? null : source.Trim(),
             SourceTypeCode = sourceTypeCode.Trim(),
             DynamicAnswersJson = dynamicAnswersJson,
-            Resume = resume ?? answerFiles.Values.FirstOrDefault(),
+            Resume = resume,
             AnswerFilesByQuestionId = answerFiles
         }, null);
+    }
+
+    public static string? ValidateRequiredQuestionAnswers(
+        IReadOnlyList<JobBotQuestionDto> questions,
+        string? dynamicAnswersJson,
+        IFormFile? resume,
+        IReadOnlyDictionary<string, IFormFile> answerFilesByQuestionId)
+    {
+        var requiredQuestions = questions
+            .Where(q => q.IsActive && q.IsRequired)
+            .ToList();
+
+        if (requiredQuestions.Count == 0)
+            return null;
+
+        Dictionary<Guid, string>? answersByQuestionId = null;
+        if (!string.IsNullOrWhiteSpace(dynamicAnswersJson)
+            && TryDeserializeDynamicAnswers(dynamicAnswersJson, out var payload)
+            && payload?.Answers is { Count: > 0 })
+        {
+            answersByQuestionId = payload.Answers
+                .Where(a => !string.IsNullOrWhiteSpace(a.Value))
+                .ToDictionary(a => a.QuestionId, a => a.Value.Trim());
+        }
+
+        var hasResume = resume is { Length: > 0 };
+
+        foreach (var question in requiredQuestions)
+        {
+            var isFileQuestion = string.Equals(
+                question.AnswerType,
+                JobBotQuestionAnswerTypes.File,
+                StringComparison.OrdinalIgnoreCase);
+
+            if (isFileQuestion)
+            {
+                if (hasResume)
+                    continue;
+
+                if (answerFilesByQuestionId.TryGetValue(question.Id.ToString(), out var answerFile)
+                    && answerFile.Length > 0)
+                    continue;
+
+                if (answersByQuestionId?.ContainsKey(question.Id) == true)
+                    continue;
+
+                return "Resume or answerFile_{questionId} is required.";
+            }
+
+            if (answersByQuestionId?.ContainsKey(question.Id) == true)
+                continue;
+
+            return $"{question.QuestionKey} is required.";
+        }
+
+        return null;
     }
 
     public static async Task<(string? DynamicAnswersJson, string? ResumeDocumentId)> ProcessApplyFilesAsync(
@@ -71,7 +124,7 @@ public static class PublicJobApplyFormParser
         string? dynamicAnswersJson,
         IReadOnlyList<JobBotQuestionDto> questions,
         IReadOnlyDictionary<string, IFormFile> answerFilesByQuestionId,
-        IFormFile resumeFile,
+        IFormFile? resumeFile,
         IResumeDocumentsUploader resumeUploader,
         CancellationToken cancellationToken)
     {
@@ -127,7 +180,7 @@ public static class PublicJobApplyFormParser
                          string.Equals(q.AnswerType, JobBotQuestionAnswerTypes.File, StringComparison.OrdinalIgnoreCase)))
             {
                 var answer = updatedAnswers.FirstOrDefault(a => a.QuestionId == question.Id);
-                if (answer is null || !string.IsNullOrWhiteSpace(answer.Value))
+                if (answer is null || !string.IsNullOrWhiteSpace(answer.Value) || resumeFile is null)
                     continue;
 
                 answer.Value = await resumeUploader.UploadResumeAsync(orgId, resumeFile, cancellationToken);
@@ -139,7 +192,9 @@ public static class PublicJobApplyFormParser
                 JsonOptions);
         }
 
-        resumeDocumentId ??= await resumeUploader.UploadResumeAsync(orgId, resumeFile, cancellationToken);
+        if (resumeFile is not null)
+            resumeDocumentId ??= await resumeUploader.UploadResumeAsync(orgId, resumeFile, cancellationToken);
+
         return (dynamicAnswersJson, resumeDocumentId);
     }
 
