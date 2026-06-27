@@ -86,7 +86,7 @@ public class WhatsAppApplyResumeService : IWhatsAppApplyResumeService
         string? fileNameHint,
         CancellationToken cancellationToken)
     {
-        await using var download = await _twilioMedia.DownloadAsync(mediaUrl, fileNameHint, cancellationToken);
+        await using var download = await _twilioMedia.DownloadAsync(orgId, mediaUrl, fileNameHint, cancellationToken);
         _logger.LogInformation(
             "[WhatsAppResume] Step=upload_documents OrgId={OrgId} FileName={FileName} Bytes={Bytes} ContentType={ContentType}",
             orgId,

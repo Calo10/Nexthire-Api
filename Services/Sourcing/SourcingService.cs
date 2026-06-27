@@ -2,6 +2,7 @@ using System.Data;
 using nexthire_api.Data;
 using nexthire_api.DTOs;
 using nexthire_api.DTOs.Sourcing;
+using nexthire_api.Helpers;
 using nexthire_api.Repositories;
 using nexthire_api.Repositories.Sourcing;
 using nexthire_api.Services;
@@ -18,6 +19,7 @@ public class SourcingService : ISourcingService
     private readonly IPipelineRepository _pipeline;
     private readonly IDbConnectionFactory _connectionFactory;
     private readonly IMetaAdsService _metaAdsService;
+    private readonly IWhatsAppMessengerRouteSyncService _whatsAppMessengerRouteSync;
     private readonly ILogger<SourcingService> _logger;
 
     public SourcingService(
@@ -27,6 +29,7 @@ public class SourcingService : ISourcingService
         IPipelineRepository pipeline,
         IDbConnectionFactory connectionFactory,
         IMetaAdsService metaAdsService,
+        IWhatsAppMessengerRouteSyncService whatsAppMessengerRouteSync,
         ILogger<SourcingService> logger)
     {
         _sourcing = sourcing;
@@ -35,6 +38,7 @@ public class SourcingService : ISourcingService
         _pipeline = pipeline;
         _connectionFactory = connectionFactory;
         _metaAdsService = metaAdsService;
+        _whatsAppMessengerRouteSync = whatsAppMessengerRouteSync;
         _logger = logger;
     }
 
@@ -451,14 +455,34 @@ public class SourcingService : ISourcingService
         return _sourcing.GetSourceConnectionsAsync(orgId);
     }
 
-    public async Task UpsertSourceConnectionAsync(Guid orgId, UpsertSourcingSourceConnectionRequestDto dto)
+    public async Task<UpsertSourcingSourceConnectionResponseDto> UpsertSourceConnectionAsync(
+        Guid orgId,
+        UpsertSourcingSourceConnectionRequestDto dto,
+        CancellationToken cancellationToken = default)
     {
         var code = dto.SourceTypeCode.Trim();
         if (!await _sourcing.SourceTypeExistsAsync(code))
             throw new ArgumentException("sourceTypeCode does not exist.");
 
         dto.SourceTypeCode = code;
+
+        if (string.Equals(code, "twilio", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(dto.ConfigJson))
+        {
+            var existingConfig = await _sourcing.GetSourceConnectionConfigJsonAsync(orgId, code, cancellationToken);
+            dto.ConfigJson = TwilioSourceConnectionConfigMerger.Merge(dto.ConfigJson, existingConfig);
+        }
+
         await _sourcing.UpsertSourceConnectionAsync(orgId, dto);
+
+        var routeSync = await _whatsAppMessengerRouteSync.SyncTwilioRouteAfterUpsertAsync(orgId, dto, cancellationToken);
+        if (routeSync is not null)
+            return routeSync;
+
+        return new UpsertSourcingSourceConnectionResponseDto
+        {
+            SourceTypeCode = code
+        };
     }
 
     public async Task<PagedResult<SourcingCampaignListItemDto>> GetCampaignsAsync(
