@@ -36,7 +36,20 @@ public interface ISourcingRepository
 
     Task<IReadOnlyList<SourcingSourceConnectionListItemDto>> GetSourceConnectionsAsync(Guid orgId);
 
+    Task<string?> GetSourceConnectionConfigJsonAsync(
+        Guid orgId,
+        string sourceTypeCode,
+        CancellationToken cancellationToken = default);
+
     Task UpsertSourceConnectionAsync(Guid orgId, UpsertSourcingSourceConnectionRequestDto dto);
+
+    Task UpdateMessengerRouteSyncAsync(
+        Guid orgId,
+        string sourceTypeCode,
+        string status,
+        string? error,
+        DateTimeOffset? syncedAt,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Active Meta connection JSON from <c>sourcing_source_connections.config_json</c>, or null if not connected.

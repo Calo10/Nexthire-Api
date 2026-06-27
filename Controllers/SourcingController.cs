@@ -307,13 +307,15 @@ public class SourcingController : ControllerBase
 
     [HttpPost("source-connections")]
     [Authorize]
-    public async Task<IActionResult> UpsertSourceConnection([FromBody] UpsertSourcingSourceConnectionRequestDto dto)
+    public async Task<ActionResult<UpsertSourcingSourceConnectionResponseDto>> UpsertSourceConnection(
+        [FromBody] UpsertSourcingSourceConnectionRequestDto dto,
+        CancellationToken cancellationToken)
     {
         try
         {
             var orgId = ClaimUtils.RequireOrgId(User);
-            await _sourcing.UpsertSourceConnectionAsync(orgId, dto);
-            return NoContent();
+            var result = await _sourcing.UpsertSourceConnectionAsync(orgId, dto, cancellationToken);
+            return Ok(result);
         }
         catch (UnauthorizedAccessException ex)
         {

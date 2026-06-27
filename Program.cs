@@ -207,6 +207,7 @@ builder.Services.AddScoped<ITeamService, TeamService>();
 builder.Services.AddScoped<IApplicationsService, ApplicationsService>();
 builder.Services.AddScoped<IDocumentService, DocumentService>();
 builder.Services.AddScoped<IResumeDocumentsUploader, ResumeDocumentsUploader>();
+builder.Services.AddScoped<ITwilioOrgCredentialsResolver, TwilioOrgCredentialsResolver>();
 builder.Services.AddScoped<IWhatsAppTwilioMediaService, WhatsAppTwilioMediaService>();
 builder.Services.AddScoped<IWhatsAppApplyResumeService, WhatsAppApplyResumeService>();
 builder.Services.AddScoped<IWhatsAppInboundService, WhatsAppInboundService>();
@@ -278,6 +279,8 @@ builder.Services.AddHttpClient("DocumentService", client =>
 builder.Services.AddScoped<INexaClient, NexaClient>();
 builder.Services.AddHttpClient<IEmailService, EmailService>();
 builder.Services.AddHttpClient<INexaMessengerWhatsAppClient, NexaMessengerWhatsAppClient>();
+builder.Services.AddHttpClient<INexaMessengerWhatsAppRoutesClient, NexaMessengerWhatsAppRoutesClient>();
+builder.Services.AddScoped<IWhatsAppMessengerRouteSyncService, WhatsAppMessengerRouteSyncService>();
 
 // Add auth services
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();

@@ -40,7 +40,10 @@ public interface ISourcingService
 
     Task<IReadOnlyList<SourcingSourceConnectionListItemDto>> GetSourceConnectionsAsync(Guid orgId);
 
-    Task UpsertSourceConnectionAsync(Guid orgId, UpsertSourcingSourceConnectionRequestDto dto);
+    Task<UpsertSourcingSourceConnectionResponseDto> UpsertSourceConnectionAsync(
+        Guid orgId,
+        UpsertSourcingSourceConnectionRequestDto dto,
+        CancellationToken cancellationToken = default);
 
     Task<PagedResult<SourcingCampaignListItemDto>> GetCampaignsAsync(
         Guid orgId,

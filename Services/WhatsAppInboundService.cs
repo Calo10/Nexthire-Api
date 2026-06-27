@@ -4,6 +4,7 @@ using nexthire_api.DTOs;
 using nexthire_api.DTOs.Sourcing;
 using nexthire_api.Helpers;
 using nexthire_api.Repositories;
+using nexthire_api.Options;
 using nexthire_api.Services.Sourcing;
 using OpenAI.Chat;
 
@@ -20,6 +21,7 @@ public class WhatsAppInboundService : IWhatsAppInboundService
     private readonly IWhatsAppInboundRepository _repository;
     private readonly IWhatsAppAiService _aiService;
     private readonly INexaMessengerWhatsAppClient _messengerClient;
+    private readonly ITwilioOrgCredentialsResolver _twilioCredentials;
     private readonly IConfiguration _configuration;
     private readonly IPipelineRepository _pipeline;
     private readonly ISourcingService _sourcing;
@@ -31,6 +33,7 @@ public class WhatsAppInboundService : IWhatsAppInboundService
         IWhatsAppInboundRepository repository,
         IWhatsAppAiService aiService,
         INexaMessengerWhatsAppClient messengerClient,
+        ITwilioOrgCredentialsResolver twilioCredentials,
         IConfiguration configuration,
         IPipelineRepository pipeline,
         ISourcingService sourcing,
@@ -41,6 +44,7 @@ public class WhatsAppInboundService : IWhatsAppInboundService
         _repository = repository;
         _aiService = aiService;
         _messengerClient = messengerClient;
+        _twilioCredentials = twilioCredentials;
         _configuration = configuration;
         _pipeline = pipeline;
         _sourcing = sourcing;
@@ -218,10 +222,13 @@ public class WhatsAppInboundService : IWhatsAppInboundService
         if (context == null)
             throw new KeyNotFoundException("Conversation not found.");
 
+        var twilio = await ResolveTwilioCredentialsAsync(request.TenantId, cancellationToken);
+
         var providerMessageId = await _messengerClient.SendMessageAsync(
             request.TenantId,
             context.PhoneNumber,
             request.Body,
+            twilio,
             cancellationToken);
 
         var messageId = await _repository.SaveOutboundMessageForInboxAsync(
@@ -252,10 +259,13 @@ public class WhatsAppInboundService : IWhatsAppInboundService
             request.CandidateId,
             cancellationToken);
 
+        var twilio = await ResolveTwilioCredentialsAsync(request.TenantId, cancellationToken);
+
         var providerMessageId = await _messengerClient.SendMessageAsync(
             request.TenantId,
             normalizedTo,
             request.Body,
+            twilio,
             cancellationToken);
 
         var messageId = await _repository.SaveOutboundMessageForInboxAsync(
@@ -353,10 +363,13 @@ public class WhatsAppInboundService : IWhatsAppInboundService
                 context.ContactPhone,
                 reply.Length);
 
+            var twilio = await ResolveTwilioCredentialsAsync(inbound.TenantId, cancellationToken);
+
             var outboundProviderMessageId = await _messengerClient.SendMessageAsync(
                 inbound.TenantId,
                 context.ContactPhone,
                 reply,
+                twilio,
                 cancellationToken);
 
             await _repository.SaveOutboundMessageAsync(
@@ -898,4 +911,29 @@ public class WhatsAppInboundService : IWhatsAppInboundService
 
     private static string SerializeApplySession(WhatsAppApplySessionState session) =>
         JsonSerializer.Serialize(session, ApplySessionJsonOptions);
+
+    private async Task<TwilioOrgCredentials> ResolveTwilioCredentialsAsync(
+        string tenantId,
+        CancellationToken cancellationToken)
+    {
+        var orgId = await ResolveOrgIdFromTenantAsync(tenantId, cancellationToken);
+        return await _twilioCredentials.ResolveAsync(orgId, cancellationToken);
+    }
+
+    private async Task<Guid> ResolveOrgIdFromTenantAsync(string tenantId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(tenantId))
+            throw new InvalidOperationException("tenantId is required to resolve Twilio credentials.");
+
+        var trimmed = tenantId.Trim();
+        if (Guid.TryParse(trimmed, out var orgId))
+            return orgId;
+
+        var fromDb = await _repository.LookupOrgIdByMessengerTenantAsync(trimmed, cancellationToken);
+        if (fromDb.HasValue)
+            return fromDb.Value;
+
+        throw new InvalidOperationException(
+            $"Cannot resolve organization from tenant '{trimmed}'. Use org GUID or configure whatsapp_tenant_mappings.");
+    }
 }
