@@ -780,7 +780,9 @@ public class WhatsAppInboundService : IWhatsAppInboundService
                 },
                 ApplySessionJsonOptions);
 
-            await _sourcing.CreateLeadAsync(
+            var resumeSummaryTask = _sourcing.PrefetchResumeSummaryAsync(orgId, resumeUrl, cancellationToken);
+
+            var lead = await _sourcing.CreateLeadAsync(
                 orgId,
                 new CreateSourcingLeadRequestDto
                 {
@@ -795,6 +797,8 @@ public class WhatsAppInboundService : IWhatsAppInboundService
                     DynamicAnswersJson = dynamicAnswersJson,
                     RawPayloadJson = payload
                 });
+
+            await _sourcing.ScoreLeadFitAsync(orgId, lead, resumeSummaryTask, cancellationToken);
         }
         catch (Exception ex)
         {

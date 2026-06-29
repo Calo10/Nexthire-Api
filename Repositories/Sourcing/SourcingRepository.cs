@@ -345,6 +345,20 @@ public class SourcingRepository : ISourcingRepository
         };
     }
 
+    public async Task<bool> LeadExistsForJobAndEmailAsync(Guid orgId, Guid jobId, string emailLower)
+    {
+        const string sql = @"
+            SELECT TOP 1 1
+            FROM sourcing_leads
+            WHERE org_id = @orgId
+              AND job_id = @jobId
+              AND LOWER(email) = @emailLower;";
+
+        using var connection = _connectionFactory.CreateConnection();
+        var exists = await connection.QueryFirstOrDefaultAsync<int?>(sql, new { orgId, jobId, emailLower });
+        return exists.HasValue;
+    }
+
     public async Task<SourcingLeadDetailDto> CreateLeadAsync(Guid orgId, CreateSourcingLeadRequestDto dto)
     {
         var id = Guid.NewGuid();
@@ -437,6 +451,32 @@ public class SourcingRepository : ISourcingRepository
             return null;
 
         return await GetLeadByIdAsync(orgId, leadId);
+    }
+
+    public async Task<bool> UpdateLeadFitScoreAsync(
+        Guid orgId,
+        Guid leadId,
+        decimal fitScore,
+        string qualificationNotes)
+    {
+        const string sql = @"
+            UPDATE sourcing_leads
+            SET
+                fit_score = @fitScore,
+                qualification_notes = @qualificationNotes,
+                updated_at = SYSUTCDATETIME()
+            WHERE org_id = @orgId AND id = @leadId;";
+
+        using var connection = _connectionFactory.CreateConnection();
+        var rows = await connection.ExecuteAsync(sql, new
+        {
+            orgId,
+            leadId,
+            fitScore,
+            qualificationNotes
+        });
+
+        return rows > 0;
     }
 
     public async Task<SourcingLeadDetailDto?> PatchLeadStatusAsync(Guid orgId, Guid leadId, string newStatus, string? notes)

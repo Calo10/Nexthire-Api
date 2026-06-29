@@ -106,10 +106,13 @@ public class SourcingController : ControllerBase
                 return BadRequest(ModelState);
 
             var resumeDocumentId = await _resumeDocumentsUploader.UploadResumeAsync(resolvedOrgId.Value, form.Resume, HttpContext.RequestAborted);
+            var resumeSummaryTask = _sourcing.PrefetchResumeSummaryAsync(resolvedOrgId.Value, resumeDocumentId, HttpContext.RequestAborted);
             var dto = MapCreateLeadFormToDto(form);
             dto.ResumeUrl = resumeDocumentId;
             var created = await _sourcing.CreateLeadAsync(resolvedOrgId.Value, dto);
-            return CreatedAtAction(nameof(GetLead), new { id = created.Id }, created);
+            await _sourcing.ScoreLeadFitAsync(resolvedOrgId.Value, created, resumeSummaryTask, HttpContext.RequestAborted);
+            var createdWithScore = await _sourcing.GetLeadAsync(resolvedOrgId.Value, created.Id) ?? created;
+            return CreatedAtAction(nameof(GetLead), new { id = createdWithScore.Id }, createdWithScore);
         }
         catch (UnauthorizedAccessException ex)
         {

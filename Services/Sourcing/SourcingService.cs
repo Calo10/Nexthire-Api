@@ -20,6 +20,7 @@ public class SourcingService : ISourcingService
     private readonly IDbConnectionFactory _connectionFactory;
     private readonly IMetaAdsService _metaAdsService;
     private readonly IWhatsAppMessengerRouteSyncService _whatsAppMessengerRouteSync;
+    private readonly ISourcingLeadFitScoringAgent _fitScoringAgent;
     private readonly ILogger<SourcingService> _logger;
 
     public SourcingService(
@@ -30,6 +31,7 @@ public class SourcingService : ISourcingService
         IDbConnectionFactory connectionFactory,
         IMetaAdsService metaAdsService,
         IWhatsAppMessengerRouteSyncService whatsAppMessengerRouteSync,
+        ISourcingLeadFitScoringAgent fitScoringAgent,
         ILogger<SourcingService> logger)
     {
         _sourcing = sourcing;
@@ -39,6 +41,7 @@ public class SourcingService : ISourcingService
         _connectionFactory = connectionFactory;
         _metaAdsService = metaAdsService;
         _whatsAppMessengerRouteSync = whatsAppMessengerRouteSync;
+        _fitScoringAgent = fitScoringAgent;
         _logger = logger;
     }
 
@@ -106,6 +109,37 @@ public class SourcingService : ISourcingService
 
         dto.SourceTypeCode = code;
         return await _sourcing.CreateLeadAsync(orgId, dto);
+    }
+
+    public Task ScoreLeadFitAsync(
+        Guid orgId,
+        SourcingLeadDetailDto lead,
+        Task<string?>? resumeSummaryTask = null,
+        CancellationToken cancellationToken = default)
+    {
+        return ScoreLeadFitCoreAsync(orgId, lead, resumeSummaryTask, cancellationToken);
+    }
+
+    public Task<string?> PrefetchResumeSummaryAsync(
+        Guid orgId,
+        string? resumeDocumentId,
+        CancellationToken cancellationToken = default)
+        => _fitScoringAgent.FetchResumeSummaryAsync(orgId, resumeDocumentId, cancellationToken);
+
+    public Task<bool> LeadExistsForJobAndEmailAsync(Guid orgId, Guid jobId, string emailLower)
+        => _sourcing.LeadExistsForJobAndEmailAsync(orgId, jobId, emailLower);
+
+    private async Task ScoreLeadFitCoreAsync(
+        Guid orgId,
+        SourcingLeadDetailDto lead,
+        Task<string?>? resumeSummaryTask,
+        CancellationToken cancellationToken)
+    {
+        var resumeSummary = resumeSummaryTask is not null
+            ? await resumeSummaryTask.ConfigureAwait(false)
+            : null;
+
+        await _fitScoringAgent.ScoreLeadIfEnabledAsync(orgId, lead, resumeSummary, cancellationToken);
     }
 
     public Task<SourcingLeadDetailDto?> GetLeadAsync(Guid orgId, Guid leadId)

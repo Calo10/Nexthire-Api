@@ -21,6 +21,7 @@ public class ApplicationCardDto
     public string Status { get; set; } = string.Empty;
     public DateTimeOffset? AppliedAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
+    public decimal? FitScore { get; set; }
 }
 
 public class KanbanBoardDto

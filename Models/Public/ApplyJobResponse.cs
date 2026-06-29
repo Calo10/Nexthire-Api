@@ -4,7 +4,7 @@ namespace nexthire_api.Models.Public;
 
 public class ApplyJobResponse
 {
-    public CandidateDto Candidate { get; set; } = new();
-    public ApplicationCardDto Application { get; set; } = new();
+    public Guid LeadId { get; set; }
+    public string Message { get; set; } = "Application received.";
 }
 
