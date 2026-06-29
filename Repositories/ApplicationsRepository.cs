@@ -378,10 +378,29 @@ public class ApplicationsRepository : IApplicationsRepository
                 a.current_stage_id AS CurrentStageId,
                 a.status AS Status,
                 a.applied_at AS AppliedAt,
-                a.created_at AS CreatedAt
+                a.created_at AS CreatedAt,
+                leadFit.fit_score AS FitScore
             FROM applications a
             INNER JOIN jobs j ON j.id = a.job_id AND j.org_id = @orgId
             INNER JOIN candidates c ON c.id = a.candidate_id AND c.org_id = @orgId
+            OUTER APPLY (
+                SELECT TOP (1) sl.fit_score
+                FROM sourcing_leads sl
+                WHERE sl.org_id = a.org_id
+                  AND sl.job_id = a.job_id
+                  AND (
+                      sl.converted_application_id = a.id
+                      OR sl.converted_candidate_id = a.candidate_id
+                      OR (sl.email IS NOT NULL AND LOWER(sl.email) = LOWER(c.email))
+                  )
+                ORDER BY
+                    CASE
+                        WHEN sl.converted_application_id = a.id THEN 0
+                        WHEN sl.converted_candidate_id = a.candidate_id THEN 1
+                        ELSE 2
+                    END,
+                    sl.updated_at DESC
+            ) leadFit
             WHERE a.org_id = @orgId AND a.job_id = @jobId
             ORDER BY a.created_at DESC;";
 
@@ -402,10 +421,29 @@ public class ApplicationsRepository : IApplicationsRepository
                 a.current_stage_id AS CurrentStageId,
                 a.status AS Status,
                 a.applied_at AS AppliedAt,
-                a.created_at AS CreatedAt
+                a.created_at AS CreatedAt,
+                leadFit.fit_score AS FitScore
             FROM applications a
             INNER JOIN jobs j ON j.id = a.job_id AND j.org_id = @orgId
             INNER JOIN candidates c ON c.id = a.candidate_id AND c.org_id = @orgId
+            OUTER APPLY (
+                SELECT TOP (1) sl.fit_score
+                FROM sourcing_leads sl
+                WHERE sl.org_id = a.org_id
+                  AND sl.job_id = a.job_id
+                  AND (
+                      sl.converted_application_id = a.id
+                      OR sl.converted_candidate_id = a.candidate_id
+                      OR (sl.email IS NOT NULL AND LOWER(sl.email) = LOWER(c.email))
+                  )
+                ORDER BY
+                    CASE
+                        WHEN sl.converted_application_id = a.id THEN 0
+                        WHEN sl.converted_candidate_id = a.candidate_id THEN 1
+                        ELSE 2
+                    END,
+                    sl.updated_at DESC
+            ) leadFit
             WHERE a.org_id = @orgId AND a.id = @applicationId;";
 
         using var connection = _connectionFactory.CreateConnection();
@@ -437,10 +475,29 @@ public class ApplicationsRepository : IApplicationsRepository
                 a.current_stage_id AS CurrentStageId,
                 a.status AS Status,
                 a.applied_at AS AppliedAt,
-                a.created_at AS CreatedAt
+                a.created_at AS CreatedAt,
+                leadFit.fit_score AS FitScore
             FROM applications a
             INNER JOIN jobs j ON j.id = a.job_id AND j.org_id = @OrgId
             INNER JOIN candidates c ON c.id = a.candidate_id AND c.org_id = @OrgId
+            OUTER APPLY (
+                SELECT TOP (1) sl.fit_score
+                FROM sourcing_leads sl
+                WHERE sl.org_id = a.org_id
+                  AND sl.job_id = a.job_id
+                  AND (
+                      sl.converted_application_id = a.id
+                      OR sl.converted_candidate_id = a.candidate_id
+                      OR (sl.email IS NOT NULL AND LOWER(sl.email) = LOWER(c.email))
+                  )
+                ORDER BY
+                    CASE
+                        WHEN sl.converted_application_id = a.id THEN 0
+                        WHEN sl.converted_candidate_id = a.candidate_id THEN 1
+                        ELSE 2
+                    END,
+                    sl.updated_at DESC
+            ) leadFit
             WHERE a.org_id = @OrgId AND a.id = @Id;";
 
         var connection = transaction?.Connection ?? _connectionFactory.CreateConnection();

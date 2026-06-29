@@ -40,6 +40,13 @@ public class OrganizationSettingsService : IOrganizationSettingsService
         var contactEmail = NormalizeContactEmail(request.ContactEmail);
         var contactPhone = NormalizeOptionalText(request.ContactPhone, 80);
 
+        OrganizationSettingsDto? existing = null;
+        if ((!request.RemoveLogo && string.IsNullOrWhiteSpace(request.LogoBase64))
+            || request.FitScoringEnabled is null)
+        {
+            existing = await _repository.GetAsync(orgId);
+        }
+
         string? logoBase64;
         string? logoContentType;
 
@@ -50,7 +57,6 @@ public class OrganizationSettingsService : IOrganizationSettingsService
         }
         else if (string.IsNullOrWhiteSpace(request.LogoBase64))
         {
-            var existing = await _repository.GetAsync(orgId);
             logoBase64 = existing?.LogoBase64;
             logoContentType = existing?.LogoContentType;
         }
@@ -69,6 +75,8 @@ public class OrganizationSettingsService : IOrganizationSettingsService
         if (logoBase64 is null)
             logoContentType = null;
 
+        var fitScoringEnabled = request.FitScoringEnabled ?? existing?.FitScoringEnabled ?? false;
+
         return await _repository.UpsertAsync(
             orgId,
             displayName,
@@ -77,7 +85,8 @@ public class OrganizationSettingsService : IOrganizationSettingsService
             contactPhone,
             logoBase64,
             logoContentType,
-            palette);
+            palette,
+            fitScoringEnabled);
     }
 
     public async Task<PublicOrganizationBrandingDto> GetPublicBrandingAsync(
@@ -125,6 +134,7 @@ public class OrganizationSettingsService : IOrganizationSettingsService
             LogoContentType = null,
             ColorPalette = palette,
             Palette = OrganizationColorPalettes.GetTokens(palette),
+            FitScoringEnabled = false,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
         };

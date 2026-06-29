@@ -16,7 +16,7 @@
     "BaseUrl": "http://localhost:7071"
   },
   "AzureOpenAI": {
-    "Resource": "https://your-resource.cognitiveservices.azure.com",
+    "ChatResource": "https://nexa-open-ai.openai.azure.com",
     "ApiKey": "paste-azure-openai-key",
     "ImageApiKey": "paste-azure-openai-key",
     "ChatApiKey": "paste-azure-openai-key"

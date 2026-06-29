@@ -23,6 +23,19 @@ public interface ISourcingService
 
     Task<SourcingLeadDetailDto> CreateLeadAsync(Guid orgId, CreateSourcingLeadRequestDto dto);
 
+    Task ScoreLeadFitAsync(
+        Guid orgId,
+        SourcingLeadDetailDto lead,
+        Task<string?>? resumeSummaryTask = null,
+        CancellationToken cancellationToken = default);
+
+    Task<string?> PrefetchResumeSummaryAsync(
+        Guid orgId,
+        string? resumeDocumentId,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> LeadExistsForJobAndEmailAsync(Guid orgId, Guid jobId, string emailLower);
+
     Task<SourcingLeadDetailDto?> GetLeadAsync(Guid orgId, Guid leadId);
 
     Task<SourcingLeadDetailDto?> UpdateLeadAsync(Guid orgId, Guid leadId, UpdateSourcingLeadRequestDto dto);

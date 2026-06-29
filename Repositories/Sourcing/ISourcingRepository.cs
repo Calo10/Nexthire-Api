@@ -24,9 +24,17 @@ public interface ISourcingRepository
 
     Task<SourcingLeadDetailDto?> GetLeadByIdAsync(Guid orgId, Guid leadId);
 
+    Task<bool> LeadExistsForJobAndEmailAsync(Guid orgId, Guid jobId, string emailLower);
+
     Task<SourcingLeadDetailDto> CreateLeadAsync(Guid orgId, CreateSourcingLeadRequestDto dto);
 
     Task<SourcingLeadDetailDto?> UpdateLeadAsync(Guid orgId, Guid leadId, UpdateSourcingLeadRequestDto dto);
+
+    Task<bool> UpdateLeadFitScoreAsync(
+        Guid orgId,
+        Guid leadId,
+        decimal fitScore,
+        string qualificationNotes);
 
     Task<SourcingLeadDetailDto?> PatchLeadStatusAsync(Guid orgId, Guid leadId, string newStatus, string? notes);
 

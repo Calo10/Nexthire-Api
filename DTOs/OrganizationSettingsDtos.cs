@@ -13,6 +13,7 @@ public class OrganizationSettingsDto
     public string? LogoContentType { get; set; }
     public string ColorPalette { get; set; } = OrganizationColorPaletteCodes.NexaDefault;
     public OrganizationColorPaletteTokensDto Palette { get; set; } = new();
+    public bool FitScoringEnabled { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 }
@@ -80,6 +81,8 @@ public class UpsertOrganizationSettingsRequestDto
 
     /// <summary>When true, removes the stored logo.</summary>
     public bool RemoveLogo { get; set; }
+
+    public bool? FitScoringEnabled { get; set; }
 }
 
 public static class OrganizationColorPaletteCodes

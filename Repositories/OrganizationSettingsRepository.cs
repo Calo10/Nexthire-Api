@@ -26,6 +26,7 @@ public class OrganizationSettingsRepository : IOrganizationSettingsRepository
                 logo_base64 AS LogoBase64,
                 logo_content_type AS LogoContentType,
                 color_palette AS ColorPalette,
+                fit_scoring_enabled AS FitScoringEnabled,
                 created_at AS CreatedAt,
                 updated_at AS UpdatedAt
             FROM organization_settings
@@ -44,7 +45,8 @@ public class OrganizationSettingsRepository : IOrganizationSettingsRepository
         string? contactPhone,
         string? logoBase64,
         string? logoContentType,
-        string colorPalette)
+        string colorPalette,
+        bool fitScoringEnabled)
     {
         const string sql = @"
             MERGE organization_settings AS target
@@ -59,9 +61,10 @@ public class OrganizationSettingsRepository : IOrganizationSettingsRepository
                     logo_base64 = @LogoBase64,
                     logo_content_type = @LogoContentType,
                     color_palette = @ColorPalette,
+                    fit_scoring_enabled = @FitScoringEnabled,
                     updated_at = TODATETIMEOFFSET(SYSUTCDATETIME(), '+00:00')
             WHEN NOT MATCHED THEN
-                INSERT (org_id, display_name, website, contact_email, contact_phone, logo_base64, logo_content_type, color_palette, created_at, updated_at)
+                INSERT (org_id, display_name, website, contact_email, contact_phone, logo_base64, logo_content_type, color_palette, fit_scoring_enabled, created_at, updated_at)
                 VALUES (
                     @OrgId,
                     @DisplayName,
@@ -71,6 +74,7 @@ public class OrganizationSettingsRepository : IOrganizationSettingsRepository
                     @LogoBase64,
                     @LogoContentType,
                     @ColorPalette,
+                    @FitScoringEnabled,
                     TODATETIMEOFFSET(SYSUTCDATETIME(), '+00:00'),
                     TODATETIMEOFFSET(SYSUTCDATETIME(), '+00:00')
                 )
@@ -83,6 +87,7 @@ public class OrganizationSettingsRepository : IOrganizationSettingsRepository
                 INSERTED.logo_base64 AS LogoBase64,
                 INSERTED.logo_content_type AS LogoContentType,
                 INSERTED.color_palette AS ColorPalette,
+                INSERTED.fit_scoring_enabled AS FitScoringEnabled,
                 INSERTED.created_at AS CreatedAt,
                 INSERTED.updated_at AS UpdatedAt;";
 
@@ -96,7 +101,8 @@ public class OrganizationSettingsRepository : IOrganizationSettingsRepository
             ContactPhone = contactPhone,
             LogoBase64 = logoBase64,
             LogoContentType = logoContentType,
-            ColorPalette = colorPalette
+            ColorPalette = colorPalette,
+            FitScoringEnabled = fitScoringEnabled
         });
 
         return Enrich(row);
