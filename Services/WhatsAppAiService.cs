@@ -21,16 +21,16 @@ public class WhatsAppAiService : IWhatsAppAiService
         string? modelOverride,
         CancellationToken cancellationToken)
     {
-        var endpoint = _configuration["AzureOpenAI:Endpoint"];
         var apiKey = _configuration["AzureOpenAI:ApiKey"];
         var deployment = modelOverride
+            ?? _configuration["AzureOpenAI:ChatDeployment"]
             ?? _configuration["AzureOpenAI:Deployment"]
             ?? "gpt-4o-mini";
 
-        if (string.IsNullOrWhiteSpace(endpoint) || string.IsNullOrWhiteSpace(apiKey))
+        if (string.IsNullOrWhiteSpace(apiKey))
             throw new InvalidOperationException("AzureOpenAI configuration is missing.");
 
-        var client = new AzureOpenAIClient(new Uri(endpoint), new AzureKeyCredential(apiKey));
+        var client = new AzureOpenAIClient(ResolveResourceUri(), new AzureKeyCredential(apiKey));
         var chatClient = client.GetChatClient(deployment);
 
         var chatMessages = new List<ChatMessage> { new SystemChatMessage(systemPrompt) };
@@ -40,7 +40,7 @@ public class WhatsAppAiService : IWhatsAppAiService
             chatMessages,
             new ChatCompletionOptions
             {
-                MaxOutputTokenCount = 180,
+                MaxOutputTokenCount = 400,
                 Temperature = 0.2f
             },
             cancellationToken);
@@ -53,5 +53,25 @@ public class WhatsAppAiService : IWhatsAppAiService
         }
 
         return content;
+    }
+
+    private Uri ResolveResourceUri()
+    {
+        var chatResource = _configuration["AzureOpenAI:ChatResource"]?.Trim();
+        if (!string.IsNullOrEmpty(chatResource))
+            return new Uri(chatResource.TrimEnd('/') + "/");
+
+        var endpoint = _configuration["AzureOpenAI:Endpoint"]?.Trim();
+        if (!string.IsNullOrEmpty(endpoint))
+        {
+            var uri = new Uri(endpoint);
+            return new Uri($"{uri.Scheme}://{uri.Authority}/");
+        }
+
+        var resource = _configuration["AzureOpenAI:Resource"]?.Trim();
+        if (!string.IsNullOrEmpty(resource))
+            return new Uri(resource.TrimEnd('/') + "/");
+
+        throw new InvalidOperationException("AzureOpenAI configuration is missing.");
     }
 }

@@ -24,9 +24,17 @@ public interface ISourcingRepository
 
     Task<SourcingLeadDetailDto?> GetLeadByIdAsync(Guid orgId, Guid leadId);
 
+    Task<bool> LeadExistsForJobAndEmailAsync(Guid orgId, Guid jobId, string emailLower);
+
     Task<SourcingLeadDetailDto> CreateLeadAsync(Guid orgId, CreateSourcingLeadRequestDto dto);
 
     Task<SourcingLeadDetailDto?> UpdateLeadAsync(Guid orgId, Guid leadId, UpdateSourcingLeadRequestDto dto);
+
+    Task<bool> UpdateLeadFitScoreAsync(
+        Guid orgId,
+        Guid leadId,
+        decimal fitScore,
+        string qualificationNotes);
 
     Task<SourcingLeadDetailDto?> PatchLeadStatusAsync(Guid orgId, Guid leadId, string newStatus, string? notes);
 
@@ -36,7 +44,20 @@ public interface ISourcingRepository
 
     Task<IReadOnlyList<SourcingSourceConnectionListItemDto>> GetSourceConnectionsAsync(Guid orgId);
 
+    Task<string?> GetSourceConnectionConfigJsonAsync(
+        Guid orgId,
+        string sourceTypeCode,
+        CancellationToken cancellationToken = default);
+
     Task UpsertSourceConnectionAsync(Guid orgId, UpsertSourcingSourceConnectionRequestDto dto);
+
+    Task UpdateMessengerRouteSyncAsync(
+        Guid orgId,
+        string sourceTypeCode,
+        string status,
+        string? error,
+        DateTimeOffset? syncedAt,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Active Meta connection JSON from <c>sourcing_source_connections.config_json</c>, or null if not connected.

@@ -106,10 +106,13 @@ public class SourcingController : ControllerBase
                 return BadRequest(ModelState);
 
             var resumeDocumentId = await _resumeDocumentsUploader.UploadResumeAsync(resolvedOrgId.Value, form.Resume, HttpContext.RequestAborted);
+            var resumeSummaryTask = _sourcing.PrefetchResumeSummaryAsync(resolvedOrgId.Value, resumeDocumentId, HttpContext.RequestAborted);
             var dto = MapCreateLeadFormToDto(form);
             dto.ResumeUrl = resumeDocumentId;
             var created = await _sourcing.CreateLeadAsync(resolvedOrgId.Value, dto);
-            return CreatedAtAction(nameof(GetLead), new { id = created.Id }, created);
+            await _sourcing.ScoreLeadFitAsync(resolvedOrgId.Value, created, resumeSummaryTask, HttpContext.RequestAborted);
+            var createdWithScore = await _sourcing.GetLeadAsync(resolvedOrgId.Value, created.Id) ?? created;
+            return CreatedAtAction(nameof(GetLead), new { id = createdWithScore.Id }, createdWithScore);
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -307,13 +310,15 @@ public class SourcingController : ControllerBase
 
     [HttpPost("source-connections")]
     [Authorize]
-    public async Task<IActionResult> UpsertSourceConnection([FromBody] UpsertSourcingSourceConnectionRequestDto dto)
+    public async Task<ActionResult<UpsertSourcingSourceConnectionResponseDto>> UpsertSourceConnection(
+        [FromBody] UpsertSourcingSourceConnectionRequestDto dto,
+        CancellationToken cancellationToken)
     {
         try
         {
             var orgId = ClaimUtils.RequireOrgId(User);
-            await _sourcing.UpsertSourceConnectionAsync(orgId, dto);
-            return NoContent();
+            var result = await _sourcing.UpsertSourceConnectionAsync(orgId, dto, cancellationToken);
+            return Ok(result);
         }
         catch (UnauthorizedAccessException ex)
         {

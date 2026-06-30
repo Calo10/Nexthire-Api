@@ -6,6 +6,7 @@ public interface IWhatsAppTwilioMediaService
     /// Downloads a Twilio-hosted media URL (requires Basic auth).
     /// </summary>
     Task<WhatsAppTwilioMediaDownload> DownloadAsync(
+        Guid orgId,
         string mediaUrl,
         string? fileNameHint = null,
         CancellationToken cancellationToken = default);

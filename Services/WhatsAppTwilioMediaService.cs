@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.RegularExpressions;
+using nexthire_api.Options;
 
 namespace nexthire_api.Services;
 
@@ -9,20 +10,21 @@ public partial class WhatsAppTwilioMediaService : IWhatsAppTwilioMediaService
     private const long MaxBytes = 10 * 1024 * 1024;
 
     private readonly IHttpClientFactory _httpClientFactory;
-    private readonly IConfiguration _configuration;
+    private readonly ITwilioOrgCredentialsResolver _twilioCredentials;
     private readonly ILogger<WhatsAppTwilioMediaService> _logger;
 
     public WhatsAppTwilioMediaService(
         IHttpClientFactory httpClientFactory,
-        IConfiguration configuration,
+        ITwilioOrgCredentialsResolver twilioCredentials,
         ILogger<WhatsAppTwilioMediaService> logger)
     {
         _httpClientFactory = httpClientFactory;
-        _configuration = configuration;
+        _twilioCredentials = twilioCredentials;
         _logger = logger;
     }
 
     public async Task<WhatsAppTwilioMediaDownload> DownloadAsync(
+        Guid orgId,
         string mediaUrl,
         string? fileNameHint = null,
         CancellationToken cancellationToken = default)
@@ -34,22 +36,17 @@ public partial class WhatsAppTwilioMediaService : IWhatsAppTwilioMediaService
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
             throw new InvalidOperationException("media URL is not valid.");
 
-        var credentials = ResolveTwilioCredentials(uri);
-        if (credentials is null)
-        {
-            throw new InvalidOperationException(
-                "Twilio credentials are not configured. Set Twilio:AccountSid and Twilio:AuthToken " +
-                "(or TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN).");
-        }
+        var credentials = await _twilioCredentials.ResolveAsync(orgId, cancellationToken);
 
         using var client = _httpClientFactory.CreateClient("Twilio");
         using var request = new HttpRequestMessage(HttpMethod.Get, uri);
-        var basic = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{credentials.Value.AccountSid}:{credentials.Value.AuthToken}"));
+        var basic = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{credentials.AccountSid}:{credentials.AuthToken}"));
         request.Headers.Authorization = new AuthenticationHeaderValue("Basic", basic);
 
         _logger.LogInformation(
-            "[WhatsAppResume] Twilio download start AccountSid={AccountSid} UrlHost={Host}",
-            credentials.Value.AccountSid,
+            "[WhatsAppResume] Twilio download start OrgId={OrgId} AccountSid={AccountSid} UrlHost={Host}",
+            orgId,
+            credentials.AccountSid,
             uri.Host);
 
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
@@ -91,27 +88,6 @@ public partial class WhatsAppTwilioMediaService : IWhatsAppTwilioMediaService
             ContentType = contentType,
             Length = buffer.Length
         };
-    }
-
-    private (string AccountSid, string AuthToken)? ResolveTwilioCredentials(Uri mediaUri)
-    {
-        var accountSid = _configuration["TWILIO_ACCOUNT_SID"]
-            ?? _configuration["Twilio:AccountSid"]
-            ?? _configuration["MessengerFunction:TwilioAccountSid"]
-            ?? _configuration["WhatsApp:TwilioAccountSid"];
-        var authToken = _configuration["TWILIO_AUTH_TOKEN"]
-            ?? _configuration["Twilio:AuthToken"]
-            ?? _configuration["MessengerFunction:TwilioAuthToken"]
-            ?? _configuration["WhatsApp:TwilioAuthToken"];
-
-        var fromUrl = TryExtractAccountSidFromTwilioUrl(mediaUri);
-        if (!string.IsNullOrWhiteSpace(fromUrl))
-            accountSid = string.IsNullOrWhiteSpace(accountSid) ? fromUrl : accountSid;
-
-        if (string.IsNullOrWhiteSpace(accountSid) || string.IsNullOrWhiteSpace(authToken))
-            return null;
-
-        return (accountSid.Trim(), authToken.Trim());
     }
 
     internal static string? TryExtractAccountSidFromTwilioUrl(Uri uri)

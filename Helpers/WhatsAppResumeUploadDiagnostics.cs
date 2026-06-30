@@ -34,6 +34,7 @@ public static class WhatsAppResumeUploadDiagnostics
         ex switch
         {
             InvalidOperationException { Message: var m } when m.Contains("Twilio credentials", StringComparison.OrdinalIgnoreCase)
+                || m.Contains("Twilio is not configured", StringComparison.OrdinalIgnoreCase)
                 => "twilio_credentials_missing",
             InvalidOperationException { Message: var m } when m.Contains("Failed to download WhatsApp media", StringComparison.OrdinalIgnoreCase)
                 => "twilio_download_failed",

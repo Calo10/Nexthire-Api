@@ -207,6 +207,7 @@ builder.Services.AddScoped<ITeamService, TeamService>();
 builder.Services.AddScoped<IApplicationsService, ApplicationsService>();
 builder.Services.AddScoped<IDocumentService, DocumentService>();
 builder.Services.AddScoped<IResumeDocumentsUploader, ResumeDocumentsUploader>();
+builder.Services.AddScoped<ITwilioOrgCredentialsResolver, TwilioOrgCredentialsResolver>();
 builder.Services.AddScoped<IWhatsAppTwilioMediaService, WhatsAppTwilioMediaService>();
 builder.Services.AddScoped<IWhatsAppApplyResumeService, WhatsAppApplyResumeService>();
 builder.Services.AddScoped<IWhatsAppInboundService, WhatsAppInboundService>();
@@ -231,6 +232,7 @@ builder.Services.AddScoped<ITemplatesRepository, TemplatesRepository>();
 builder.Services.AddScoped<IOrganizationSettingsRepository, OrganizationSettingsRepository>();
 builder.Services.AddScoped<ISourcingRepository, SourcingRepository>();
 builder.Services.AddScoped<IWhatsAppInboundRepository, WhatsAppInboundRepository>();
+builder.Services.AddScoped<ISourcingLeadFitScoringAgent, SourcingLeadFitScoringAgent>();
 builder.Services.AddScoped<ISourcingService, SourcingService>();
 builder.Services.AddScoped<IMarketingMetaCampaignRepository, MarketingMetaCampaignRepository>();
 builder.Services.AddHttpClient("MetaGraph", client =>
@@ -272,12 +274,14 @@ builder.Services.AddHttpClient("DocumentService", client =>
     var baseUrl = builder.Configuration["DocumentService:BaseUrl"];
     if (!string.IsNullOrWhiteSpace(baseUrl))
         client.BaseAddress = new Uri(baseUrl);
-    client.Timeout = TimeSpan.FromSeconds(10);
+    client.Timeout = TimeSpan.FromSeconds(120);
 });
 
 builder.Services.AddScoped<INexaClient, NexaClient>();
 builder.Services.AddHttpClient<IEmailService, EmailService>();
 builder.Services.AddHttpClient<INexaMessengerWhatsAppClient, NexaMessengerWhatsAppClient>();
+builder.Services.AddHttpClient<INexaMessengerWhatsAppRoutesClient, NexaMessengerWhatsAppRoutesClient>();
+builder.Services.AddScoped<IWhatsAppMessengerRouteSyncService, WhatsAppMessengerRouteSyncService>();
 
 // Add auth services
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();

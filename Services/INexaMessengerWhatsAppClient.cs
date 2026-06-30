@@ -1,3 +1,5 @@
+using nexthire_api.Options;
+
 namespace nexthire_api.Services;
 
 public interface INexaMessengerWhatsAppClient
@@ -6,5 +8,6 @@ public interface INexaMessengerWhatsAppClient
         string tenantId,
         string toPhone,
         string body,
+        TwilioOrgCredentials twilio,
         CancellationToken cancellationToken = default);
 }

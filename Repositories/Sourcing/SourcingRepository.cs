@@ -21,6 +21,7 @@ public class SourcingRepository : ISourcingRepository
     private static readonly ConcurrentDictionary<string, HashSet<string>> TrackingEventColumnsCache = new();
     private static readonly ConcurrentDictionary<string, HashSet<string>> LeadEventColumnsCache = new();
     private static readonly ConcurrentDictionary<string, HashSet<string>> SourceTypeColumnsCache = new();
+    private static readonly ConcurrentDictionary<string, HashSet<string>> SourceConnectionColumnsCache = new();
 
     public SourcingRepository(IDbConnectionFactory connectionFactory, ILogger<SourcingRepository> logger)
     {
@@ -344,6 +345,20 @@ public class SourcingRepository : ISourcingRepository
         };
     }
 
+    public async Task<bool> LeadExistsForJobAndEmailAsync(Guid orgId, Guid jobId, string emailLower)
+    {
+        const string sql = @"
+            SELECT TOP 1 1
+            FROM sourcing_leads
+            WHERE org_id = @orgId
+              AND job_id = @jobId
+              AND LOWER(email) = @emailLower;";
+
+        using var connection = _connectionFactory.CreateConnection();
+        var exists = await connection.QueryFirstOrDefaultAsync<int?>(sql, new { orgId, jobId, emailLower });
+        return exists.HasValue;
+    }
+
     public async Task<SourcingLeadDetailDto> CreateLeadAsync(Guid orgId, CreateSourcingLeadRequestDto dto)
     {
         var id = Guid.NewGuid();
@@ -438,6 +453,32 @@ public class SourcingRepository : ISourcingRepository
         return await GetLeadByIdAsync(orgId, leadId);
     }
 
+    public async Task<bool> UpdateLeadFitScoreAsync(
+        Guid orgId,
+        Guid leadId,
+        decimal fitScore,
+        string qualificationNotes)
+    {
+        const string sql = @"
+            UPDATE sourcing_leads
+            SET
+                fit_score = @fitScore,
+                qualification_notes = @qualificationNotes,
+                updated_at = SYSUTCDATETIME()
+            WHERE org_id = @orgId AND id = @leadId;";
+
+        using var connection = _connectionFactory.CreateConnection();
+        var rows = await connection.ExecuteAsync(sql, new
+        {
+            orgId,
+            leadId,
+            fitScore,
+            qualificationNotes
+        });
+
+        return rows > 0;
+    }
+
     public async Task<SourcingLeadDetailDto?> PatchLeadStatusAsync(Guid orgId, Guid leadId, string newStatus, string? notes)
     {
         const string updateSql = @"
@@ -503,8 +544,12 @@ public class SourcingRepository : ISourcingRepository
     public async Task<IReadOnlyList<SourcingSourceConnectionListItemDto>> GetSourceConnectionsAsync(Guid orgId)
     {
         using var connection = _connectionFactory.CreateConnection();
-        var cols = await GetSourceTypeColumnSetAsync(connection);
-        var hasSortOrder = cols.Contains("sort_order");
+        var typeCols = await GetSourceTypeColumnSetAsync(connection);
+        var connCols = await GetSourceConnectionColumnSetAsync(connection);
+        var hasSortOrder = typeCols.Contains("sort_order");
+        var hasRouteSyncStatus = connCols.Contains("messenger_route_sync_status");
+        var hasRouteSyncError = connCols.Contains("messenger_route_sync_error");
+        var hasRouteSyncedAt = connCols.Contains("messenger_route_synced_at");
 
         var sql = $@"
             SELECT
@@ -514,7 +559,10 @@ public class SourcingRepository : ISourcingRepository
                 CAST(COALESCE(conn.is_connected, 0) AS bit) AS IsConnected,
                 CAST(COALESCE(conn.is_active, 0) AS bit) AS IsActive,
                 conn.config_json AS ConfigJson,
-                conn.updated_at AS UpdatedAt
+                conn.updated_at AS UpdatedAt,
+                {(hasRouteSyncStatus ? "conn.messenger_route_sync_status" : "CAST(NULL AS nvarchar(32))")} AS MessengerRouteSyncStatus,
+                {(hasRouteSyncError ? "conn.messenger_route_sync_error" : "CAST(NULL AS nvarchar(2000))")} AS MessengerRouteSyncError,
+                {(hasRouteSyncedAt ? "conn.messenger_route_synced_at" : "CAST(NULL AS datetimeoffset(7))")} AS MessengerRouteSyncedAt
             FROM sourcing_source_types st
             LEFT JOIN sourcing_source_connections conn
                 ON conn.source_type_code = st.code AND conn.org_id = @orgId
@@ -523,6 +571,22 @@ public class SourcingRepository : ISourcingRepository
 
         var rows = await connection.QueryAsync<SourcingSourceConnectionListItemDto>(sql, new { orgId });
         return rows.ToList();
+    }
+
+    public async Task<string?> GetSourceConnectionConfigJsonAsync(
+        Guid orgId,
+        string sourceTypeCode,
+        CancellationToken cancellationToken = default)
+    {
+        const string sql = @"
+            SELECT config_json
+            FROM sourcing_source_connections
+            WHERE org_id = @orgId
+              AND source_type_code = @sourceTypeCode;";
+
+        using var connection = _connectionFactory.CreateConnection();
+        return await connection.QueryFirstOrDefaultAsync<string?>(
+            new CommandDefinition(sql, new { orgId, sourceTypeCode }, cancellationToken: cancellationToken));
     }
 
     public async Task UpsertSourceConnectionAsync(Guid orgId, UpsertSourcingSourceConnectionRequestDto dto)
@@ -556,6 +620,34 @@ public class SourcingRepository : ISourcingRepository
             dto.IsActive,
             configJson = dto.ConfigJson
         });
+    }
+
+    public async Task UpdateMessengerRouteSyncAsync(
+        Guid orgId,
+        string sourceTypeCode,
+        string status,
+        string? error,
+        DateTimeOffset? syncedAt,
+        CancellationToken cancellationToken = default)
+    {
+        using var connection = _connectionFactory.CreateConnection();
+        var cols = await GetSourceConnectionColumnSetAsync(connection);
+        if (!cols.Contains("messenger_route_sync_status"))
+            return;
+
+        const string sql = @"
+            UPDATE sourcing_source_connections
+            SET messenger_route_sync_status = @status,
+                messenger_route_sync_error = @error,
+                messenger_route_synced_at = @syncedAt,
+                updated_at = SYSUTCDATETIME()
+            WHERE org_id = @orgId AND source_type_code = @sourceTypeCode;";
+
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                sql,
+                new { orgId, sourceTypeCode, status, error, syncedAt },
+                cancellationToken: cancellationToken));
     }
 
     public async Task<string?> GetActiveSourceConnectionConfigJsonAsync(
@@ -687,6 +779,7 @@ END";
         {
             ("public_apply", "Public apply", "Applications from the public careers page"),
             ("whatsapp", "WhatsApp", "Applications via WhatsApp bot"),
+            ("twilio", "Twilio", "Twilio credentials for WhatsApp messaging"),
             ("meta_ads", "Meta Ads", "Applications from Meta advertising"),
         };
 
@@ -1250,6 +1343,22 @@ END";
 
         var set = (await connection.QueryAsync<string>(sql)).ToHashSet(StringComparer.OrdinalIgnoreCase);
         SourceTypeColumnsCache[key] = set;
+        return set;
+    }
+
+    private async Task<HashSet<string>> GetSourceConnectionColumnSetAsync(IDbConnection connection)
+    {
+        var key = connection.ConnectionString ?? "default";
+        if (SourceConnectionColumnsCache.TryGetValue(key, out var cached))
+            return cached;
+
+        const string sql = @"
+            SELECT LOWER(COLUMN_NAME) AS c
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'sourcing_source_connections';";
+
+        var set = (await connection.QueryAsync<string>(sql)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        SourceConnectionColumnsCache[key] = set;
         return set;
     }
 }

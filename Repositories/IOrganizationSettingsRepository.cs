@@ -13,5 +13,6 @@ public interface IOrganizationSettingsRepository
         string? contactPhone,
         string? logoBase64,
         string? logoContentType,
-        string colorPalette);
+        string colorPalette,
+        bool fitScoringEnabled);
 }

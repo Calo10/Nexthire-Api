@@ -21,6 +21,9 @@ public class SourcingSourceConnectionListItemDto
     public bool IsActive { get; set; }
     public string? ConfigJson { get; set; }
     public DateTimeOffset? UpdatedAt { get; set; }
+    public string? MessengerRouteSyncStatus { get; set; }
+    public string? MessengerRouteSyncError { get; set; }
+    public DateTimeOffset? MessengerRouteSyncedAt { get; set; }
 }
 
 public class UpsertSourcingSourceConnectionRequestDto
@@ -32,4 +35,12 @@ public class UpsertSourcingSourceConnectionRequestDto
     public bool IsConnected { get; set; }
     public bool IsActive { get; set; }
     public string? ConfigJson { get; set; }
+}
+
+public class UpsertSourcingSourceConnectionResponseDto
+{
+    public string SourceTypeCode { get; set; } = string.Empty;
+    public string? MessengerRouteSyncStatus { get; set; }
+    public string? MessengerRouteSyncError { get; set; }
+    public DateTimeOffset? MessengerRouteSyncedAt { get; set; }
 }
