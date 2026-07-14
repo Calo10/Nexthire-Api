@@ -64,7 +64,7 @@ public class OrganizationSettingsRepository : IOrganizationSettingsRepository
                     fit_scoring_enabled = @FitScoringEnabled,
                     updated_at = TODATETIMEOFFSET(SYSUTCDATETIME(), '+00:00')
             WHEN NOT MATCHED THEN
-                INSERT (org_id, display_name, website, contact_email, contact_phone, logo_base64, logo_content_type, color_palette, fit_scoring_enabled, created_at, updated_at)
+                INSERT (org_id, display_name, website, contact_email, contact_phone, logo_base64, logo_content_type, color_palette, fit_scoring_enableds, created_at, updated_at)
                 VALUES (
                     @OrgId,
                     @DisplayName,
