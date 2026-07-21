@@ -1289,7 +1289,9 @@ END";
                 connection.Open();
             else if (connection.State != ConnectionState.Open)
                 connection.Open();
-            var cols = await GetLeadEventColumnSetAsync(connection);
+            // Schema probe must enlist in the same transaction when using a shared connection,
+            // otherwise SqlClient throws BeginExecuteReader (pending local transaction).
+            var cols = await GetLeadEventColumnSetAsync(connection, transaction);
             var supportsNotes = cols.Contains("notes");
 
             var sql = supportsNotes
@@ -1314,7 +1316,9 @@ END";
         }
     }
 
-    private async Task<HashSet<string>> GetLeadEventColumnSetAsync(IDbConnection connection)
+    private async Task<HashSet<string>> GetLeadEventColumnSetAsync(
+        IDbConnection connection,
+        IDbTransaction? transaction = null)
     {
         var key = connection.ConnectionString ?? "default";
         if (LeadEventColumnsCache.TryGetValue(key, out var cached))
@@ -1325,7 +1329,8 @@ END";
             FROM INFORMATION_SCHEMA.COLUMNS
             WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'sourcing_lead_events';";
 
-        var set = (await connection.QueryAsync<string>(sql)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var set = (await connection.QueryAsync<string>(sql, transaction: transaction))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         LeadEventColumnsCache[key] = set;
         return set;
     }
