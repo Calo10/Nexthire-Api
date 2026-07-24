@@ -2434,18 +2434,25 @@ Output rules:
     }
 
     private Uri GetAzureOpenAiResourceUri()
-        => GetAzureOpenAiResourceUriFor("AzureOpenAI:ImageResource");
+        => ResolveAzureOpenAiUri(
+            "AzureOpenAI:ImageResource",
+            "AzureOpenAI:Resource",
+            "AzureOpenAI:Endpoint");
 
     private Uri GetAzureOpenAiResourceUriFor(string preferredKey)
+        => ResolveAzureOpenAiUri(
+            preferredKey,
+            "AzureOpenAI:ChatResource",
+            "AzureOpenAI:Resource",
+            "AzureOpenAI:Endpoint");
+
+    /// <summary>
+    /// Resolve an Absolute Azure OpenAI base URI from the first configured non-placeholder key.
+    /// Image and chat may use different resources/keys — do not mix ImageApiKey with ChatResource.
+    /// </summary>
+    private Uri ResolveAzureOpenAiUri(params string[] keys)
     {
-        foreach (var key in new[]
-                 {
-                     preferredKey,
-                     "AzureOpenAI:ImageResource",
-                     "AzureOpenAI:ChatResource",
-                     "AzureOpenAI:Resource",
-                     "AzureOpenAI:Endpoint"
-                 }.Distinct(StringComparer.OrdinalIgnoreCase))
+        foreach (var key in keys)
         {
             var raw = _configuration[key]?.Trim();
             if (string.IsNullOrEmpty(raw) || IsPlaceholderAzureHost(raw))
@@ -2463,8 +2470,7 @@ Output rules:
         }
 
         throw new InvalidOperationException(
-            "Azure Open AI is not configured. Set AzureOpenAI:ImageResource or AzureOpenAI:ChatResource " +
-            "to your real endpoint (e.g. https://nexa-open-ai.openai.azure.com), not a placeholder.");
+            "Azure Open AI is not configured (AzureOpenAI:ImageResource / ChatResource / Resource / Endpoint).");
     }
 
     private static bool IsPlaceholderAzureHost(string value)
@@ -2472,8 +2478,7 @@ Output rules:
         try
         {
             var host = new Uri(value).Host.ToLowerInvariant();
-            return host.Contains("your-resource", StringComparison.Ordinal) ||
-                   host is "example.com";
+            return host.Contains("your-resource", StringComparison.Ordinal);
         }
         catch
         {

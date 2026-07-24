@@ -17,12 +17,9 @@
   },
   "AzureOpenAI": {
     "ChatResource": "https://nexa-open-ai.openai.azure.com",
-    "ImageResource": "https://nexa-open-ai.openai.azure.com",
-    "Resource": "https://nexa-open-ai.openai.azure.com",
     "ApiKey": "paste-azure-openai-key",
     "ImageApiKey": "paste-azure-openai-key",
-    "ChatApiKey": "paste-azure-openai-key",
-    "ImageDeployment": "ads-image-generator"
+    "ChatApiKey": "paste-azure-openai-key"
   },
   "ConnectionStrings": {
     "NextHireDb": "Server=...;User ID=...;Password=...;"
