@@ -31,10 +31,12 @@ You write one English prompt for an image model to create a recruiting ad for Me
 Output rules:
 - Output ONLY the image prompt text. No title, no quotes, no markdown, no bullet list.
 - Reflect the job's industry, seniority, and tone from the title and description.
+- When Ad text is provided, use it as the supporting/CTA copy tone (do not invent conflicting messaging).
+- When Custom AI instructions are provided, follow them closely for style, scene, colors, and composition (as long as they remain brand-safe).
 - Design as a square ad (1:1), professional, eye-catching, with clean hierarchy like social recruiting creatives.
 - MUST include clear, readable overlay text in the final image with this exact headline format:
   "WE ARE HIRING: <JOB_TITLE>"
-- Add one short supporting line (e.g., "Apply now" / "Join our team"). Keep text minimal and readable.
+- Add one short supporting line (prefer the Ad text when present; otherwise e.g. "Apply now" / "Join our team"). Keep text minimal and readable.
 - No logos, no watermarks, no phone/UI screenshots, no brand names, no real person's likeness.
 - Brand-safe and suitable for paid employment advertising.
 """;
@@ -124,6 +126,8 @@ Output rules:
     public async Task<GenerateMetaCreativePreviewResponse> GenerateCreativePreviewFromJobAsync(
         Guid orgId,
         Guid jobId,
+        string? creativeMessage = null,
+        string? aiInstructions = null,
         CancellationToken cancellationToken = default)
     {
         var job = await _jobRepository.GetByIdAsync(orgId, jobId);
@@ -137,7 +141,20 @@ Output rules:
         if (description.Length > 8000)
             description = description[..8000] + "…";
 
-        var imagePrompt = await BuildDallePromptFromJobAsync(title, description, cancellationToken);
+        var adText = string.IsNullOrWhiteSpace(creativeMessage) ? null : creativeMessage.Trim();
+        if (adText != null && adText.Length > 1000)
+            adText = adText[..1000] + "…";
+
+        var customInstructions = string.IsNullOrWhiteSpace(aiInstructions) ? null : aiInstructions.Trim();
+        if (customInstructions != null && customInstructions.Length > 2000)
+            customInstructions = customInstructions[..2000] + "…";
+
+        var imagePrompt = await BuildDallePromptFromJobAsync(
+            title,
+            description,
+            adText,
+            customInstructions,
+            cancellationToken);
         if (imagePrompt.Length > 3500)
             imagePrompt = imagePrompt[..3500];
 
@@ -1634,6 +1651,494 @@ Output rules:
         };
     }
 
+    public async Task<MetaAdAccountStatusDto> GetAdAccountStatusAsync(
+        Guid orgId,
+        CancellationToken cancellationToken = default)
+    {
+        var meta = await ResolveMetaAdsContextAsync(orgId, cancellationToken);
+        var client = _httpClientFactory.CreateClient(HttpClientName);
+
+        const string fields =
+            "name,account_id,account_status,disable_reason,amount_spent,balance,currency,spend_cap," +
+            "funding_source_details";
+        var path = $"{meta.AdAccountId}?fields={Uri.EscapeDataString(fields)}";
+        var url = BuildGraphUrl(meta.ApiVersion, path, meta.AccessToken);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        using var response = await client.SendAsync(request, cancellationToken);
+        var payload = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+            throw await ParseMetaErrorAsync(response, payload, cancellationToken);
+
+        using var doc = JsonDocument.Parse(payload);
+        if (doc.RootElement.TryGetProperty("error", out _))
+            throw await ParseMetaErrorFromBodyAsync(response, payload, cancellationToken);
+
+        var root = doc.RootElement;
+        var accountStatus = root.TryGetProperty("account_status", out var st) && st.TryGetInt32(out var sti)
+            ? sti
+            : 0;
+        var disableReason = root.TryGetProperty("disable_reason", out var dr) && dr.TryGetInt32(out var dri)
+            ? dri
+            : (int?)null;
+
+        var (statusKey, statusLabel, isHealthy, isPaymentIssue) =
+            MapAdAccountStatus(accountStatus, disableReason);
+
+        string? fundingDisplay = null;
+        if (root.TryGetProperty("funding_source_details", out var funding) &&
+            funding.ValueKind == JsonValueKind.Object)
+        {
+            var display = funding.TryGetProperty("display_string", out var ds) ? ds.GetString() : null;
+            var type = funding.TryGetProperty("type", out var ft)
+                ? (ft.ValueKind == JsonValueKind.Number ? ft.ToString() : ft.GetString())
+                : null;
+            fundingDisplay = !string.IsNullOrWhiteSpace(display)
+                ? display
+                : (!string.IsNullOrWhiteSpace(type) ? $"Type {type}" : null);
+        }
+
+        // Meta returns amount_spent / balance as cents (string) for many accounts.
+        decimal? ToMoney(string name)
+        {
+            if (!root.TryGetProperty(name, out var el))
+                return null;
+            var raw = el.ValueKind == JsonValueKind.String
+                ? el.GetString()
+                : el.ValueKind == JsonValueKind.Number
+                    ? el.ToString()
+                    : null;
+            if (string.IsNullOrWhiteSpace(raw) ||
+                !decimal.TryParse(raw, System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture, out var cents))
+                return null;
+            // Heuristic: values without decimal and large enough are cents.
+            return cents >= 100 && !raw!.Contains('.') ? cents / 100m : cents;
+        }
+
+        return new MetaAdAccountStatusDto
+        {
+            AdAccountId = meta.AdAccountId,
+            Name = root.TryGetProperty("name", out var n) ? n.GetString() : null,
+            Currency = root.TryGetProperty("currency", out var cur) ? cur.GetString() ?? "USD" : "USD",
+            AccountStatus = accountStatus,
+            StatusKey = statusKey,
+            StatusLabel = statusLabel,
+            IsHealthy = isHealthy,
+            IsPaymentIssue = isPaymentIssue || IsPaymentDisableReason(disableReason),
+            DisableReason = disableReason,
+            DisableReasonLabel = MapDisableReasonLabel(disableReason),
+            AmountSpent = ToMoney("amount_spent"),
+            Balance = ToMoney("balance"),
+            SpendCap = ToMoney("spend_cap"),
+            FundingSourceDisplay = fundingDisplay
+        };
+    }
+
+    private static (string Key, string Label, bool Healthy, bool PaymentIssue) MapAdAccountStatus(
+        int accountStatus,
+        int? disableReason)
+    {
+        return accountStatus switch
+        {
+            1 => ("active", "Active", true, false),
+            2 => ("disabled", "Disabled", false, IsPaymentDisableReason(disableReason)),
+            3 => ("unsettled", "Unsettled", false, true),
+            7 => ("pending", "Pending risk review", false, false),
+            8 => ("pending", "Pending settlement", false, true),
+            9 => ("grace", "In grace period", true, true),
+            100 => ("closed", "Pending closure", false, false),
+            101 => ("closed", "Closed", false, false),
+            _ => ("unknown", $"Status {accountStatus}", false, false)
+        };
+    }
+
+    private static bool IsPaymentDisableReason(int? disableReason) =>
+        disableReason is 3 or 10; // RISK_PAYMENT / disabled until payment processed
+
+    private static string? MapDisableReasonLabel(int? disableReason) =>
+        disableReason switch
+        {
+            null or 0 => null,
+            1 => "Ads integrity policy",
+            2 => "Ads IP review",
+            3 => "Payment risk",
+            4 => "Gray account shut down",
+            5 => "Ads AFC review",
+            6 => "Business integrity review",
+            7 => "Permanent close",
+            8 => "Unused reseller account",
+            9 => "Unused account",
+            10 => "Disabled until payment is processed",
+            _ => $"Disable reason {disableReason}"
+        };
+
+    public async Task<MetaCampaignInsightsDto> GetCampaignInsightsAsync(
+        Guid orgId,
+        string campaignRef,
+        string? datePreset = null,
+        CancellationToken cancellationToken = default)
+    {
+        var preset = NormalizeInsightsDatePreset(datePreset);
+        var target = await ResolveCampaignActionTargetAsync(orgId, campaignRef, cancellationToken);
+        var meta = await ResolveMetaAdsContextAsync(orgId, cancellationToken);
+        var client = _httpClientFactory.CreateClient(HttpClientName);
+
+        var dto = await FetchCampaignInsightsAsync(
+            client,
+            meta.ApiVersion,
+            meta.AccessToken,
+            target.MetaCampaignId,
+            preset,
+            cancellationToken);
+
+        dto.LocalRecordId = target.LocalRecordId;
+        dto.MetaCampaignId = target.MetaCampaignId;
+        dto.DatePreset = preset;
+
+        if (target.LocalRecordId is Guid localId)
+        {
+            var row = await _marketingRepo.GetByIdForTenantAsync(localId, orgId.ToString("D"), cancellationToken)
+                      ?? await _marketingRepo.GetByIdAsync(localId, cancellationToken);
+            if (row != null && !string.IsNullOrWhiteSpace(row.CampaignName))
+                dto.CampaignName = row.CampaignName;
+        }
+
+        return dto;
+    }
+
+    public async Task<MetaCampaignInsightsListResponse> ListCampaignInsightsAsync(
+        Guid orgId,
+        string? datePreset = null,
+        CancellationToken cancellationToken = default)
+    {
+        var preset = NormalizeInsightsDatePreset(datePreset);
+        var tenantId = orgId.ToString("D");
+        var rows = await _marketingRepo.ListByTenantAsync(tenantId, jobId: null, cancellationToken);
+        var meta = await ResolveMetaAdsContextAsync(orgId, cancellationToken);
+        var client = _httpClientFactory.CreateClient(HttpClientName);
+
+        var items = new List<MetaCampaignInsightsDto>();
+        foreach (var row in rows)
+        {
+            if (string.IsNullOrWhiteSpace(row.MetaCampaignId))
+                continue;
+
+            try
+            {
+                var dto = await FetchCampaignInsightsAsync(
+                    client,
+                    meta.ApiVersion,
+                    meta.AccessToken,
+                    row.MetaCampaignId,
+                    preset,
+                    cancellationToken);
+                dto.LocalRecordId = row.Id;
+                dto.MetaCampaignId = row.MetaCampaignId;
+                dto.CampaignName = row.CampaignName;
+                dto.DatePreset = preset;
+                items.Add(dto);
+            }
+            catch (MetaGraphApiException ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Failed to fetch Meta insights for campaign {MetaCampaignId} (local {LocalId}).",
+                    row.MetaCampaignId,
+                    row.Id);
+                items.Add(new MetaCampaignInsightsDto
+                {
+                    LocalRecordId = row.Id,
+                    MetaCampaignId = row.MetaCampaignId,
+                    CampaignName = row.CampaignName,
+                    DatePreset = preset,
+                    Empty = true
+                });
+            }
+        }
+
+        return new MetaCampaignInsightsListResponse
+        {
+            DatePreset = preset,
+            Items = items
+        };
+    }
+
+    private async Task<MetaCampaignInsightsDto> FetchCampaignInsightsAsync(
+        HttpClient client,
+        string version,
+        string accessToken,
+        string metaCampaignId,
+        string datePreset,
+        CancellationToken cancellationToken)
+    {
+        // Core fields first — some optional metrics fail on certain objectives/permissions.
+        const string primaryFields =
+            "impressions,reach,spend,clicks,inline_link_clicks,ctr,cpc,cpm,frequency," +
+            "actions,cost_per_action_type,cost_per_inline_link_click,date_start,date_stop," +
+            "campaign_id,campaign_name";
+        const string fallbackFields =
+            "impressions,reach,spend,clicks,ctr,cpc,cpm,frequency,actions,cost_per_action_type," +
+            "date_start,date_stop,campaign_id,campaign_name";
+
+        try
+        {
+            return await FetchCampaignInsightsWithFieldsAsync(
+                client, version, accessToken, metaCampaignId, datePreset, primaryFields, cancellationToken);
+        }
+        catch (MetaGraphApiException ex) when (ex.HttpStatus is >= 400 and < 500)
+        {
+            _logger.LogWarning(
+                ex,
+                "Primary Meta insights fields failed for {MetaCampaignId}; retrying with fallback fields.",
+                metaCampaignId);
+            return await FetchCampaignInsightsWithFieldsAsync(
+                client, version, accessToken, metaCampaignId, datePreset, fallbackFields, cancellationToken);
+        }
+    }
+
+    private async Task<MetaCampaignInsightsDto> FetchCampaignInsightsWithFieldsAsync(
+        HttpClient client,
+        string version,
+        string accessToken,
+        string metaCampaignId,
+        string datePreset,
+        string fields,
+        CancellationToken cancellationToken)
+    {
+        var path =
+            $"{metaCampaignId.Trim()}/insights" +
+            $"?fields={Uri.EscapeDataString(fields)}" +
+            $"&date_preset={Uri.EscapeDataString(datePreset)}" +
+            "&limit=1";
+        var url = BuildGraphUrl(version, path, accessToken);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        using var response = await client.SendAsync(request, cancellationToken);
+        var payload = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+            throw await ParseMetaErrorAsync(response, payload, cancellationToken);
+
+        using var doc = JsonDocument.Parse(payload);
+        if (doc.RootElement.TryGetProperty("error", out _))
+            throw await ParseMetaErrorFromBodyAsync(response, payload, cancellationToken);
+
+        if (!doc.RootElement.TryGetProperty("data", out var data) ||
+            data.ValueKind != JsonValueKind.Array ||
+            data.GetArrayLength() == 0)
+        {
+            return new MetaCampaignInsightsDto
+            {
+                MetaCampaignId = metaCampaignId,
+                DatePreset = datePreset,
+                Empty = true
+            };
+        }
+
+        return MapInsightsRow(data[0], metaCampaignId, datePreset);
+    }
+
+    private static MetaCampaignInsightsDto MapInsightsRow(
+        JsonElement row,
+        string metaCampaignId,
+        string datePreset)
+    {
+        var actions = ParseInsightActions(row, "actions");
+        var costPerAction = ParseInsightActions(row, "cost_per_action_type");
+        var metaLeads = SumLeadActions(actions);
+        var costPerLead = FindActionValue(costPerAction, LeadActionTypes);
+
+        var dto = new MetaCampaignInsightsDto
+        {
+            MetaCampaignId = ReadInsightString(row, "campaign_id") ?? metaCampaignId,
+            CampaignName = ReadInsightString(row, "campaign_name"),
+            DatePreset = datePreset,
+            DateStart = ReadInsightString(row, "date_start"),
+            DateStop = ReadInsightString(row, "date_stop"),
+            Impressions = ReadInsightLong(row, "impressions"),
+            Reach = ReadInsightLong(row, "reach"),
+            Clicks = ReadInsightLong(row, "clicks"),
+            UniqueClicks = ReadInsightLong(row, "unique_clicks"),
+            InlineLinkClicks = ReadInsightLong(row, "inline_link_clicks")
+                               ?? SumActionValues(actions, "link_click", "inline_link_click"),
+            OutboundClicks = ReadInsightLong(row, "outbound_clicks")
+                             ?? SumActionValues(actions, "outbound_click"),
+            Spend = ReadInsightDecimal(row, "spend"),
+            Cpc = ReadInsightDecimal(row, "cpc"),
+            Cpm = ReadInsightDecimal(row, "cpm"),
+            Cpp = ReadInsightDecimal(row, "cpp"),
+            Ctr = ReadInsightDecimal(row, "ctr"),
+            Frequency = ReadInsightDecimal(row, "frequency"),
+            CostPerInlineLinkClick = ReadInsightDecimal(row, "cost_per_inline_link_click")
+                                     ?? FindActionValue(costPerAction, "link_click", "inline_link_click"),
+            MetaLeads = metaLeads,
+            CostPerLead = costPerLead,
+            Actions = actions,
+            CostPerActionType = costPerAction,
+            Empty = false
+        };
+
+        return dto;
+    }
+
+    private static readonly HashSet<string> LeadActionTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "lead",
+        "onsite_conversion.lead_grouped",
+        "onsite_conversion.fb_pixel_lead",
+        "offsite_conversion.fb_pixel_lead",
+        "leadgen_grouped"
+    };
+
+    private static readonly HashSet<string> AllowedInsightsDatePresets = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "today", "yesterday", "this_month", "last_month", "this_quarter", "maximum",
+        "data_maximum", "last_3d", "last_7d", "last_14d", "last_28d", "last_30d",
+        "last_90d", "last_week_mon_sun", "last_week_sun_sat", "last_quarter",
+        "last_year", "this_week_mon_today", "this_week_sun_today", "this_year"
+    };
+
+    private static string NormalizeInsightsDatePreset(string? datePreset)
+    {
+        var preset = string.IsNullOrWhiteSpace(datePreset) ? "maximum" : datePreset.Trim();
+        if (!AllowedInsightsDatePresets.Contains(preset))
+            throw new ArgumentException(
+                $"Unsupported datePreset '{preset}'. Use values like maximum, last_7d, last_30d.");
+        return preset.ToLowerInvariant();
+    }
+
+    private static List<MetaInsightActionDto> ParseInsightActions(JsonElement row, string propertyName)
+    {
+        var list = new List<MetaInsightActionDto>();
+        if (!row.TryGetProperty(propertyName, out var arr) || arr.ValueKind != JsonValueKind.Array)
+            return list;
+
+        foreach (var item in arr.EnumerateArray())
+        {
+            var type = item.TryGetProperty("action_type", out var at) ? at.GetString() : null;
+            if (string.IsNullOrWhiteSpace(type))
+                continue;
+            var value = ReadInsightDecimalFromElement(item.TryGetProperty("value", out var v) ? v : default);
+            if (value == null)
+                continue;
+            list.Add(new MetaInsightActionDto { ActionType = type!, Value = value.Value });
+        }
+
+        return list;
+    }
+
+    private static long? SumLeadActions(IEnumerable<MetaInsightActionDto> actions)
+    {
+        decimal sum = 0;
+        var any = false;
+        foreach (var a in actions)
+        {
+            if (!LeadActionTypes.Contains(a.ActionType))
+                continue;
+            sum += a.Value;
+            any = true;
+        }
+
+        return any ? (long)Math.Round(sum, MidpointRounding.AwayFromZero) : null;
+    }
+
+    private static long? SumActionValues(IEnumerable<MetaInsightActionDto> actions, params string[] types)
+    {
+        var set = new HashSet<string>(types, StringComparer.OrdinalIgnoreCase);
+        decimal sum = 0;
+        var any = false;
+        foreach (var a in actions)
+        {
+            if (!set.Contains(a.ActionType))
+                continue;
+            sum += a.Value;
+            any = true;
+        }
+
+        return any ? (long)Math.Round(sum, MidpointRounding.AwayFromZero) : null;
+    }
+
+    private static decimal? FindActionValue(IEnumerable<MetaInsightActionDto> actions, params string[] types)
+    {
+        var set = new HashSet<string>(types, StringComparer.OrdinalIgnoreCase);
+        foreach (var a in actions)
+        {
+            if (set.Contains(a.ActionType))
+                return a.Value;
+        }
+
+        return null;
+    }
+
+    private static decimal? FindActionValue(IEnumerable<MetaInsightActionDto> actions, HashSet<string> types)
+    {
+        foreach (var a in actions)
+        {
+            if (types.Contains(a.ActionType))
+                return a.Value;
+        }
+
+        return null;
+    }
+
+    private static string? ReadInsightString(JsonElement row, string name)
+    {
+        if (!row.TryGetProperty(name, out var el))
+            return null;
+        return el.ValueKind switch
+        {
+            JsonValueKind.String => el.GetString(),
+            JsonValueKind.Number => el.ToString(),
+            _ => null
+        };
+    }
+
+    private static long? ReadInsightLong(JsonElement row, string name)
+    {
+        if (!row.TryGetProperty(name, out var el))
+            return null;
+        return ReadInsightLongFromElement(el);
+    }
+
+    private static long? ReadInsightLongFromElement(JsonElement el)
+    {
+        if (el.ValueKind == JsonValueKind.Number && el.TryGetInt64(out var n))
+            return n;
+        if (el.ValueKind == JsonValueKind.String && long.TryParse(el.GetString(), out var s))
+            return s;
+        if (el.ValueKind == JsonValueKind.Array && el.GetArrayLength() > 0)
+            return ReadInsightLongFromElement(el[0].TryGetProperty("value", out var v) ? v : el[0]);
+        return null;
+    }
+
+    private static decimal? ReadInsightDecimal(JsonElement row, string name)
+    {
+        if (!row.TryGetProperty(name, out var el))
+            return null;
+        return ReadInsightDecimalFromElement(el);
+    }
+
+    private static decimal? ReadInsightDecimalFromElement(JsonElement el)
+    {
+        if (el.ValueKind == JsonValueKind.Number && el.TryGetDecimal(out var n))
+            return n;
+        if (el.ValueKind == JsonValueKind.String &&
+            decimal.TryParse(el.GetString(), System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var s))
+            return s;
+        if (el.ValueKind == JsonValueKind.Array && el.GetArrayLength() > 0)
+        {
+            var first = el[0];
+            if (first.TryGetProperty("value", out var v))
+                return ReadInsightDecimalFromElement(v);
+            return ReadInsightDecimalFromElement(first);
+        }
+
+        return null;
+    }
+
     public async Task DeleteMarketingCampaignRecordAsync(
         Guid orgId,
         string campaignRef,
@@ -1929,29 +2434,63 @@ Output rules:
     }
 
     private Uri GetAzureOpenAiResourceUri()
-        => GetAzureOpenAiResourceUriFor("AzureOpenAI:Resource");
+        => ResolveAzureOpenAiUri(
+            "AzureOpenAI:ImageResource",
+            "AzureOpenAI:Resource",
+            "AzureOpenAI:Endpoint");
 
     private Uri GetAzureOpenAiResourceUriFor(string preferredKey)
+        => ResolveAzureOpenAiUri(
+            preferredKey,
+            "AzureOpenAI:ChatResource",
+            "AzureOpenAI:Resource",
+            "AzureOpenAI:Endpoint");
+
+    /// <summary>
+    /// Resolve an Absolute Azure OpenAI base URI from the first configured non-placeholder key.
+    /// Image and chat may use different resources/keys — do not mix ImageApiKey with ChatResource.
+    /// </summary>
+    private Uri ResolveAzureOpenAiUri(params string[] keys)
     {
-        var preferred = _configuration[preferredKey]?.Trim();
-        if (!string.IsNullOrEmpty(preferred))
-            return new Uri(preferred.TrimEnd('/') + "/");
+        foreach (var key in keys)
+        {
+            var raw = _configuration[key]?.Trim();
+            if (string.IsNullOrEmpty(raw) || IsPlaceholderAzureHost(raw))
+                continue;
 
-        var resource = _configuration["AzureOpenAI:Resource"]?.Trim();
-        if (!string.IsNullOrEmpty(resource))
-            return new Uri(resource.TrimEnd('/') + "/");
+            try
+            {
+                var uri = new Uri(raw);
+                return new Uri($"{uri.Scheme}://{uri.Authority}/");
+            }
+            catch (UriFormatException)
+            {
+                // try next key
+            }
+        }
 
-        var ep = _configuration["AzureOpenAI:Endpoint"]?.Trim();
-        if (string.IsNullOrEmpty(ep))
-            throw new InvalidOperationException("Azure Open AI is not configured (AzureOpenAI:Resource or Endpoint).");
+        throw new InvalidOperationException(
+            "Azure Open AI is not configured (AzureOpenAI:ImageResource / ChatResource / Resource / Endpoint).");
+    }
 
-        var uri = new Uri(ep);
-        return new Uri($"{uri.Scheme}://{uri.Authority}/");
+    private static bool IsPlaceholderAzureHost(string value)
+    {
+        try
+        {
+            var host = new Uri(value).Host.ToLowerInvariant();
+            return host.Contains("your-resource", StringComparison.Ordinal);
+        }
+        catch
+        {
+            return value.Contains("your-resource", StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     private async Task<string> BuildDallePromptFromJobAsync(
         string title,
         string description,
+        string? creativeMessage,
+        string? aiInstructions,
         CancellationToken cancellationToken)
     {
         var apiKey = _configuration["AzureOpenAI:ChatApiKey"]
@@ -1970,7 +2509,13 @@ Output rules:
                 new AzureKeyCredential(apiKey));
             var chat = client.GetChatClient(deployment);
 
-            var userContent = $"Job title:\n{title}\n\nJob description:\n{description}";
+            var userContent =
+                $"Job title:\n{title}\n\nJob description:\n{description}";
+            if (!string.IsNullOrWhiteSpace(creativeMessage))
+                userContent += $"\n\nAd text:\n{creativeMessage.Trim()}";
+            if (!string.IsNullOrWhiteSpace(aiInstructions))
+                userContent += $"\n\nCustom AI instructions:\n{aiInstructions.Trim()}";
+
             var messages = new List<ChatMessage>
             {
                 new SystemChatMessage(DallePromptSystemMessage),
@@ -2001,18 +2546,32 @@ Output rules:
                 deployment);
         }
 
-        return BuildFallbackPrompt(title, description);
+        return BuildFallbackPrompt(title, description, creativeMessage, aiInstructions);
     }
 
 
-    private static string BuildFallbackPrompt(string title, string description)
+    private static string BuildFallbackPrompt(
+        string title,
+        string description,
+        string? creativeMessage,
+        string? aiInstructions)
     {
         var cleanDesc = description.Replace("\r", " ").Replace("\n", " ").Trim();
         if (cleanDesc.Length > 900)
             cleanDesc = cleanDesc[..900] + "...";
 
+        var supportLine = string.IsNullOrWhiteSpace(creativeMessage)
+            ? "Apply now"
+            : creativeMessage.Replace("\r", " ").Replace("\n", " ").Trim();
+        if (supportLine.Length > 120)
+            supportLine = supportLine[..120] + "...";
+
+        var custom = string.IsNullOrWhiteSpace(aiInstructions)
+            ? string.Empty
+            : $" Additional creative direction: {aiInstructions.Replace("\r", " ").Replace("\n", " ").Trim()}.";
+
         return
-            $"Create a professional recruiting ad image in square 1:1 composition (1024x1024), modern visual style, inclusive workforce, bright natural lighting, realistic but polished. Include large, readable ad text headline exactly: 'WE ARE HIRING: {title}'. Add a short supporting line such as 'Apply now'. Context from job description: {cleanDesc}. No logos, no watermarks, no UI screenshots, no brand names.";
+            $"Create a professional recruiting ad image in square 1:1 composition (1024x1024), modern visual style, inclusive workforce, bright natural lighting, realistic but polished. Include large, readable ad text headline exactly: 'WE ARE HIRING: {title}'. Add a short supporting line such as '{supportLine}'. Context from job description: {cleanDesc}.{custom} No logos, no watermarks, no UI screenshots, no brand names.";
     }
 
     private async Task<(string B64Json, string? RevisedPrompt)> CallAzureImageGenerationsAsync(

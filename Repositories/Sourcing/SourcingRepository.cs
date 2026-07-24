@@ -81,8 +81,8 @@ public class SourcingRepository : ISourcingRepository
 
         if (head != null)
         {
-            if (head.ConvertedLeads > 0)
-                costPerCandidate = head.TotalSpend / head.ConvertedLeads;
+            if (head.TotalLeads > 0)
+                costPerCandidate = head.TotalSpend / head.TotalLeads;
 
             if (head.TotalLeads > 0)
                 conversionRate = Math.Round(100m * head.ConvertedLeads / head.TotalLeads, 2, MidpointRounding.AwayFromZero);
@@ -707,7 +707,20 @@ public class SourcingRepository : ISourcingRepository
                 sc.start_date AS StartDate,
                 sc.end_date AS EndDate,
                 sc.created_at AS CreatedAt,
-                sc.updated_at AS UpdatedAt
+                sc.updated_at AS UpdatedAt,
+                (
+                    SELECT COUNT(1)
+                    FROM sourcing_leads sl
+                    WHERE sl.org_id = sc.org_id
+                      AND (
+                            sl.campaign_id = sc.id
+                            OR (
+                                sc.job_id IS NOT NULL
+                                AND sl.job_id = sc.job_id
+                                AND sl.campaign_id IS NULL
+                            )
+                          )
+                ) AS LeadsCount
             FROM sourcing_campaigns sc
             LEFT JOIN jobs j ON j.id = sc.job_id AND j.org_id = @orgId
             WHERE sc.org_id = @orgId
@@ -1056,7 +1069,20 @@ END";
                 sc.external_campaign_id AS ExternalCampaignId,
                 sc.external_ad_account_id AS ExternalAdAccountId,
                 sc.created_at AS CreatedAt,
-                sc.updated_at AS UpdatedAt
+                sc.updated_at AS UpdatedAt,
+                (
+                    SELECT COUNT(1)
+                    FROM sourcing_leads sl
+                    WHERE sl.org_id = sc.org_id
+                      AND (
+                            sl.campaign_id = sc.id
+                            OR (
+                                sc.job_id IS NOT NULL
+                                AND sl.job_id = sc.job_id
+                                AND sl.campaign_id IS NULL
+                            )
+                          )
+                ) AS LeadsCount
             FROM sourcing_campaigns sc
             LEFT JOIN jobs j ON j.id = sc.job_id AND j.org_id = @orgId
             WHERE sc.org_id = @orgId AND sc.id = @campaignId;";

@@ -17,6 +17,11 @@ public class SourcingCampaignListItemDto
     public DateTimeOffset? EndDate { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+
+    /// <summary>
+    /// Leads in <c>sourcing_leads</c> for this campaign's job (and/or attributed to this campaign).
+    /// </summary>
+    public int LeadsCount { get; set; }
 }
 
 public class SourcingCampaignDetailDto : SourcingCampaignListItemDto

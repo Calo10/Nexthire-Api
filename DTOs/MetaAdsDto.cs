@@ -17,6 +17,12 @@ public class GenerateMetaCreativePreviewRequest
 {
     [Required]
     public Guid JobId { get; set; }
+
+    /// <summary>Optional ad primary text shown on the Meta creative.</summary>
+    public string? CreativeMessage { get; set; }
+
+    /// <summary>Optional free-form instructions that steer the AI image generation.</summary>
+    public string? AiInstructions { get; set; }
 }
 
 /// <summary>Generated ad image for UI preview (not uploaded to Meta until the client calls creative-image).</summary>
@@ -170,4 +176,83 @@ public class MetaGeoCandidate
     public string? CountryCode { get; set; }
     public string? CountryName { get; set; }
     public string? Region { get; set; }
+}
+
+/// <summary>Normalized Meta Ads Insights for one campaign (live from Graph API).</summary>
+public class MetaCampaignInsightsDto
+{
+    public Guid? LocalRecordId { get; set; }
+    public string? MetaCampaignId { get; set; }
+    public string? CampaignName { get; set; }
+    public string DatePreset { get; set; } = "maximum";
+    public string? DateStart { get; set; }
+    public string? DateStop { get; set; }
+
+    public long? Impressions { get; set; }
+    public long? Reach { get; set; }
+    public long? Clicks { get; set; }
+    public long? UniqueClicks { get; set; }
+    public long? InlineLinkClicks { get; set; }
+    public long? OutboundClicks { get; set; }
+
+    public decimal? Spend { get; set; }
+    public decimal? Cpc { get; set; }
+    public decimal? Cpm { get; set; }
+    public decimal? Cpp { get; set; }
+    public decimal? Ctr { get; set; }
+    public decimal? Frequency { get; set; }
+    public decimal? CostPerInlineLinkClick { get; set; }
+
+    /// <summary>Lead / conversion count derived from Meta <c>actions</c> (lead, onsite_conversion.lead_grouped, etc.).</summary>
+    public long? MetaLeads { get; set; }
+    public decimal? CostPerLead { get; set; }
+
+    public IReadOnlyList<MetaInsightActionDto> Actions { get; set; } = Array.Empty<MetaInsightActionDto>();
+    public IReadOnlyList<MetaInsightActionDto> CostPerActionType { get; set; } = Array.Empty<MetaInsightActionDto>();
+
+    /// <summary>True when Meta returned no insights rows (common for brand-new campaigns).</summary>
+    public bool Empty { get; set; }
+}
+
+public class MetaInsightActionDto
+{
+    public string ActionType { get; set; } = string.Empty;
+    public decimal Value { get; set; }
+}
+
+public class MetaCampaignInsightsListResponse
+{
+    public string DatePreset { get; set; } = "maximum";
+    public IReadOnlyList<MetaCampaignInsightsDto> Items { get; set; } = Array.Empty<MetaCampaignInsightsDto>();
+}
+
+/// <summary>Live Meta Ad Account health (payment / disable status).</summary>
+public class MetaAdAccountStatusDto
+{
+    public string AdAccountId { get; set; } = string.Empty;
+    public string? Name { get; set; }
+    public string Currency { get; set; } = "USD";
+
+    /// <summary>Raw Meta <c>account_status</c> code.</summary>
+    public int AccountStatus { get; set; }
+
+    /// <summary>Normalized status: active, disabled, unsettled, pending, grace, closed, unknown.</summary>
+    public string StatusKey { get; set; } = "unknown";
+
+    public string StatusLabel { get; set; } = string.Empty;
+
+    /// <summary>True when ads can typically deliver (ACTIVE / IN_GRACE_PERIOD).</summary>
+    public bool IsHealthy { get; set; }
+
+    /// <summary>True for payment / billing related disable or unsettled states.</summary>
+    public bool IsPaymentIssue { get; set; }
+
+    public int? DisableReason { get; set; }
+    public string? DisableReasonLabel { get; set; }
+
+    public decimal? AmountSpent { get; set; }
+    public decimal? Balance { get; set; }
+    public decimal? SpendCap { get; set; }
+
+    public string? FundingSourceDisplay { get; set; }
 }

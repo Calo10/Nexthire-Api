@@ -11,10 +11,12 @@ public interface IMetaAdsService
         IFormFile file,
         CancellationToken cancellationToken = default);
 
-    /// <summary>Build an AI image prompt from job title/description, generate a Meta-friendly square asset, return base64 for UI (no Meta upload).</summary>
+    /// <summary>Build an AI image prompt from job title/description (+ optional ad text / AI instructions), generate a Meta-friendly square asset, return base64 for UI (no Meta upload).</summary>
     Task<GenerateMetaCreativePreviewResponse> GenerateCreativePreviewFromJobAsync(
         Guid orgId,
         Guid jobId,
+        string? creativeMessage = null,
+        string? aiInstructions = null,
         CancellationToken cancellationToken = default);
 
     Task<CreateMetaCampaignResponse> CreateCampaignAsync(
@@ -70,5 +72,23 @@ public interface IMetaAdsService
     Task DeleteMarketingCampaignRecordAsync(
         Guid orgId,
         string campaignRef,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Live Meta Insights for one campaign (local GUID or Meta campaign id).</summary>
+    Task<MetaCampaignInsightsDto> GetCampaignInsightsAsync(
+        Guid orgId,
+        string campaignRef,
+        string? datePreset = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Live Meta Insights for all org Meta campaigns (table summary).</summary>
+    Task<MetaCampaignInsightsListResponse> ListCampaignInsightsAsync(
+        Guid orgId,
+        string? datePreset = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Live Meta Ad Account status (active / payment issues / disabled).</summary>
+    Task<MetaAdAccountStatusDto> GetAdAccountStatusAsync(
+        Guid orgId,
         CancellationToken cancellationToken = default);
 }

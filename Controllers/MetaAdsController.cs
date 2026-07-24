@@ -68,7 +68,12 @@ public class MetaAdsController : ControllerBase
 
         try
         {
-            var result = await _metaAdsService.GenerateCreativePreviewFromJobAsync(orgId, request.JobId, cancellationToken);
+            var result = await _metaAdsService.GenerateCreativePreviewFromJobAsync(
+                orgId,
+                request.JobId,
+                request.CreativeMessage,
+                request.AiInstructions,
+                cancellationToken);
             return Ok(result);
         }
         catch (ArgumentException ex)
@@ -85,6 +90,25 @@ public class MetaAdsController : ControllerBase
         {
             _logger.LogWarning(ex, "Creative preview generation failed (configuration or OpenAI)");
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = ex.Message });
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogWarning(ex, "Creative preview generation failed (Azure OpenAI network)");
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    error =
+                        "Azure OpenAI image endpoint is unreachable. Check AzureOpenAI:ImageResource / ChatResource " +
+                        "(must be a real host, not your-resource.cognitiveservices.azure.com)."
+                });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Creative preview generation failed unexpectedly");
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { error = "No se pudo generar imagen AI en este momento" });
         }
     }
 
@@ -251,6 +275,70 @@ public class MetaAdsController : ControllerBase
     }
 
     /// <summary>
+    /// Live Meta Ad Account status (payment / disable / active).
+    /// </summary>
+    [HttpGet("ad-account/status")]
+    [ProducesResponseType(typeof(MetaAdAccountStatusDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public async Task<IActionResult> GetAdAccountStatus(CancellationToken cancellationToken)
+    {
+        if (!TryGetOrgId(out var orgId, out var unauthorized))
+            return unauthorized!;
+
+        return await ExecuteMetaInsightsAction(
+            ct => _metaAdsService.GetAdAccountStatusAsync(orgId, ct),
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Live Meta Ads Insights for all org Meta campaigns (spend, impressions, reach, clicks, etc.).
+    /// Fetched from Graph API — not stored in DB.
+    /// </summary>
+    [HttpGet("insights")]
+    [ProducesResponseType(typeof(MetaCampaignInsightsListResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public async Task<IActionResult> ListCampaignInsights(
+        [FromQuery] string? datePreset,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetOrgId(out var orgId, out var unauthorized))
+            return unauthorized!;
+
+        return await ExecuteMetaInsightsAction(
+            ct => _metaAdsService.ListCampaignInsightsAsync(orgId, datePreset, ct),
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Live Meta Ads Insights for one campaign (local record GUID or Meta campaign id).
+    /// </summary>
+    /// <param name="campaignRef">Local record GUID (<c>localRecordId</c>) or Meta <c>campaignId</c>.</param>
+    [HttpGet("campaigns/{campaignRef}/insights")]
+    [ProducesResponseType(typeof(MetaCampaignInsightsDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public async Task<IActionResult> GetCampaignInsights(
+        string campaignRef,
+        [FromQuery] string? datePreset,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetOrgId(out var orgId, out var unauthorized))
+            return unauthorized!;
+
+        return await ExecuteMetaInsightsAction(
+            ct => _metaAdsService.GetCampaignInsightsAsync(orgId, campaignRef, datePreset, ct),
+            cancellationToken);
+    }
+
+    /// <summary>
     /// Resolve a human location label (e.g. from Google Places) into Meta geo keys usable in ad set targeting.
     /// </summary>
     [HttpPost("geo/resolve")]
@@ -325,6 +413,44 @@ public class MetaAdsController : ControllerBase
             _logger.LogWarning(
                 ex,
                 "Meta Graph error on campaign action. Status={Status}, Code={Code}",
+                ex.HttpStatus,
+                ex.MetaCode);
+            return StatusCode(
+                ex.HttpStatus is >= 400 and < 600 ? ex.HttpStatus : StatusCodes.Status502BadGateway,
+                new
+                {
+                    error = ex.Message,
+                    metaCode = ex.MetaCode,
+                    metaErrorUserTitle = ex.MetaErrorUserTitle,
+                    metaErrorUserMsg = ex.MetaErrorUserMsg
+                });
+        }
+    }
+
+    private async Task<IActionResult> ExecuteMetaInsightsAction<T>(
+        Func<CancellationToken, Task<T>> action,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await action(cancellationToken);
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Meta insights validation failed");
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Meta Ads configuration error");
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = ex.Message });
+        }
+        catch (MetaGraphApiException ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Meta Graph error fetching insights. Status={Status}, Code={Code}",
                 ex.HttpStatus,
                 ex.MetaCode);
             return StatusCode(
