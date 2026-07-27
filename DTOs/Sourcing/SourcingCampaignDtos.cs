@@ -30,6 +30,11 @@ public class SourcingCampaignDetailDto : SourcingCampaignListItemDto
     public string? TrackingCode { get; set; }
     public string? ExternalCampaignId { get; set; }
     public string? ExternalAdAccountId { get; set; }
+
+    /// <summary>Creative image from <c>marketing_meta_campaigns</c> (local archive).</summary>
+    public string? ImageBase64 { get; set; }
+
+    public string? ImageContentType { get; set; }
 }
 
 public class CreateSourcingCampaignRequestDto

@@ -56,6 +56,7 @@ Output rules:
     private readonly ISourcingRepository _sourcingRepository;
     private readonly IJobRepository _jobRepository;
     private readonly IMarketingMetaCampaignRepository _marketingRepo;
+    private readonly IMarketingMetaInsightsSnapshotRepository _insightsSnapshots;
     private readonly ILogger<MetaAdsService> _logger;
 
     private readonly JsonSerializerOptions _jsonSnake = new()
@@ -82,6 +83,7 @@ Output rules:
         ISourcingRepository sourcingRepository,
         IJobRepository jobRepository,
         IMarketingMetaCampaignRepository marketingRepo,
+        IMarketingMetaInsightsSnapshotRepository insightsSnapshots,
         ILogger<MetaAdsService> logger)
     {
         _httpClientFactory = httpClientFactory;
@@ -89,6 +91,7 @@ Output rules:
         _sourcingRepository = sourcingRepository;
         _jobRepository = jobRepository;
         _marketingRepo = marketingRepo;
+        _insightsSnapshots = insightsSnapshots;
         _logger = logger;
     }
 
@@ -307,6 +310,37 @@ Output rules:
                 imageHash,
                 cancellationToken);
         }
+
+        var imageBase64 = NormalizeImageBase64(request.ImageBase64);
+        var imageContentType = string.IsNullOrWhiteSpace(request.ImageContentType)
+            ? null
+            : request.ImageContentType.Trim();
+        if (string.IsNullOrWhiteSpace(imageBase64) && !string.IsNullOrWhiteSpace(imageHash))
+        {
+            var fetched = await TryDownloadAdImageAsBase64Async(
+                client,
+                version,
+                adAccountId,
+                meta.AccessToken,
+                imageHash!,
+                cancellationToken);
+            if (fetched != null)
+            {
+                imageBase64 = fetched.Value.Base64;
+                imageContentType = fetched.Value.ContentType;
+                _logger.LogInformation(
+                    "Resolved creative image base64 from Meta adimages for hash {ImageHash} ({Bytes} bytes).",
+                    imageHash,
+                    fetched.Value.ByteLength);
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "Create campaign: imageBase64 was not provided and could not be downloaded from Meta for hash {ImageHash}.",
+                    imageHash);
+            }
+        }
+
         var campaignName = campaignBody["name"]?.GetValue<string>() ?? "Campaign";
         _logger.LogInformation(
             "Creating Meta campaign for org {OrgId}, job {JobId}, name {Name}",
@@ -369,6 +403,8 @@ Output rules:
             campaignBody,
             creativeBody,
             imageHash,
+            imageBase64,
+            imageContentType,
             campaignId,
             adSetId,
             creativeId,
@@ -469,7 +505,41 @@ Output rules:
         if (row == null || !TenantMatchesOrg(row.TenantId, orgId))
             return null;
 
-        return MapMarketingCampaignDto(row);
+        var dto = MapMarketingCampaignDto(row);
+        if (!string.IsNullOrWhiteSpace(dto.ImageBase64) || string.IsNullOrWhiteSpace(dto.ImageHash))
+            return dto;
+
+        try
+        {
+            var meta = await ResolveMetaAdsContextAsync(orgId, cancellationToken);
+            var client = _httpClientFactory.CreateClient(HttpClientName);
+            var fetched = await TryDownloadAdImageAsBase64Async(
+                client,
+                meta.ApiVersion,
+                meta.AdAccountId,
+                meta.AccessToken,
+                dto.ImageHash,
+                cancellationToken);
+            if (fetched == null)
+                return dto;
+
+            await _marketingRepo.UpdateImageAsync(
+                row.Id,
+                fetched.Value.Base64,
+                fetched.Value.ContentType,
+                cancellationToken);
+            dto.ImageBase64 = fetched.Value.Base64;
+            dto.ImageContentType = fetched.Value.ContentType;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Could not backfill creative image base64 for marketing campaign {LocalId}.",
+                localRecordId);
+        }
+
+        return dto;
     }
 
     public async Task SyncMarketingCampaignsToSourcingAsync(
@@ -534,6 +604,8 @@ Output rules:
             WhatsappMessage = row.WhatsappMessage,
             AdText = row.AdText,
             ImageHash = row.ImageHash,
+            ImageBase64 = row.ImageBase64,
+            ImageContentType = row.ImageContentType,
             MetaCampaignId = row.MetaCampaignId,
             MetaAdSetId = row.MetaAdsetId,
             MetaCreativeId = row.MetaCreativeId,
@@ -1362,12 +1434,87 @@ Output rules:
         return metaStatus.Trim().ToLowerInvariant();
     }
 
+    private static string? NormalizeImageBase64(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var trimmed = value.Trim();
+        var comma = trimmed.IndexOf(',');
+        if (trimmed.StartsWith("data:", StringComparison.OrdinalIgnoreCase) && comma >= 0)
+        {
+            trimmed = trimmed[(comma + 1)..];
+        }
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
+    }
+
+    private async Task<(string Base64, string ContentType, int ByteLength)?> TryDownloadAdImageAsBase64Async(
+        HttpClient client,
+        string version,
+        string adAccountId,
+        string accessToken,
+        string imageHash,
+        CancellationToken cancellationToken)
+    {
+        var hashesParam = Uri.EscapeDataString($"[\"{imageHash}\"]");
+        var path = $"{adAccountId}/adimages?fields=hash,url,url_128,permalink_url&hashes={hashesParam}";
+        var graphUrl = BuildGraphUrl(version, path, accessToken);
+
+        using var metaRequest = new HttpRequestMessage(HttpMethod.Get, graphUrl);
+        using var metaResponse = await client.SendAsync(metaRequest, cancellationToken);
+        var payload = await metaResponse.Content.ReadAsStringAsync(cancellationToken);
+        if (!metaResponse.IsSuccessStatusCode)
+        {
+            _logger.LogWarning(
+                "Failed to resolve Meta ad image URL for hash {ImageHash}. Status={Status}",
+                imageHash,
+                (int)metaResponse.StatusCode);
+            return null;
+        }
+
+        using var doc = JsonDocument.Parse(payload);
+        if (!doc.RootElement.TryGetProperty("data", out var data) ||
+            data.ValueKind != JsonValueKind.Array ||
+            data.GetArrayLength() == 0)
+        {
+            return null;
+        }
+
+        var first = data[0];
+        var imageUrl =
+            (first.TryGetProperty("url", out var u) ? u.GetString() : null)
+            ?? (first.TryGetProperty("permalink_url", out var p) ? p.GetString() : null)
+            ?? (first.TryGetProperty("url_128", out var u128) ? u128.GetString() : null);
+        if (string.IsNullOrWhiteSpace(imageUrl))
+            return null;
+
+        using var imageResponse = await client.GetAsync(imageUrl, cancellationToken);
+        if (!imageResponse.IsSuccessStatusCode)
+        {
+            _logger.LogWarning(
+                "Failed to download Meta ad image bytes for hash {ImageHash}. Status={Status}",
+                imageHash,
+                (int)imageResponse.StatusCode);
+            return null;
+        }
+
+        var bytes = await imageResponse.Content.ReadAsByteArrayAsync(cancellationToken);
+        if (bytes.Length == 0)
+            return null;
+
+        var contentType = imageResponse.Content.Headers.ContentType?.MediaType;
+        if (string.IsNullOrWhiteSpace(contentType) || contentType.Equals("application/octet-stream", StringComparison.OrdinalIgnoreCase))
+            contentType = "image/jpeg";
+
+        return (Convert.ToBase64String(bytes), contentType, bytes.Length);
+    }
+
     private static MarketingMetaCampaignRow BuildLocalMarketingRow(
         Guid orgId,
         CreateMetaCampaignRequest request,
         JsonObject campaignBody,
         JsonObject creativeBody,
         string? imageHash,
+        string? imageBase64,
+        string? imageContentType,
         string campaignId,
         string adSetId,
         string creativeId,
@@ -1392,6 +1539,8 @@ Output rules:
             WhatsappMessage = string.IsNullOrWhiteSpace(request.WhatsappMessage) ? null : request.WhatsappMessage.Trim(),
             AdText = adText,
             ImageHash = imageHash ?? string.Empty,
+            ImageBase64 = imageBase64,
+            ImageContentType = string.IsNullOrWhiteSpace(imageContentType) ? null : imageContentType.Trim(),
             MetaCampaignId = campaignId,
             MetaAdsetId = adSetId,
             MetaCreativeId = creativeId,
@@ -1805,6 +1954,7 @@ Output rules:
                 dto.CampaignName = row.CampaignName;
         }
 
+        await TryPersistInsightsSnapshotAsync(orgId, dto, source: "insights_fetch", cancellationToken);
         return dto;
     }
 
@@ -1839,6 +1989,7 @@ Output rules:
                 dto.CampaignName = row.CampaignName;
                 dto.DatePreset = preset;
                 items.Add(dto);
+                await TryPersistInsightsSnapshotAsync(orgId, dto, source: "insights_fetch", cancellationToken);
             }
             catch (MetaGraphApiException ex)
             {
@@ -1862,6 +2013,322 @@ Output rules:
         {
             DatePreset = preset,
             Items = items
+        };
+    }
+
+    public async Task<MetaInsightsHistoryResponse> GetInsightsHistoryAsync(
+        Guid orgId,
+        string? weekA = null,
+        string? weekB = null,
+        CancellationToken cancellationToken = default)
+    {
+        var tenantId = orgId.ToString("D");
+        var weeks = await _insightsSnapshots.ListWeekStartsAsync(tenantId, cancellationToken);
+        var weekLabels = weeks.Select(w => w.ToString("yyyy-MM-dd")).ToList();
+
+        DateOnly? a = ParseWeekStart(weekA);
+        DateOnly? b = ParseWeekStart(weekB);
+
+        if (a == null && weeks.Count > 0)
+            a = weeks[0];
+        if (b == null && weeks.Count > 1)
+            b = weeks[1];
+        else if (b == null && weeks.Count == 1)
+            b = weeks[0];
+
+        if (a == null || b == null)
+        {
+            return new MetaInsightsHistoryResponse
+            {
+                Weeks = weekLabels,
+                WeekA = a?.ToString("yyyy-MM-dd"),
+                WeekB = b?.ToString("yyyy-MM-dd")
+            };
+        }
+
+        var rowsA = await _insightsSnapshots.ListByWeekAsync(tenantId, a.Value, cancellationToken);
+        var rowsB = await _insightsSnapshots.ListByWeekAsync(tenantId, b.Value, cancellationToken);
+
+        var byMeta = new Dictionary<string, MetaInsightsHistoryCampaignCompareDto>(StringComparer.Ordinal);
+        void Ensure(MarketingMetaInsightsSnapshotRow row)
+        {
+            var key = row.MetaCampaignId;
+            if (string.IsNullOrWhiteSpace(key)) return;
+            if (!byMeta.ContainsKey(key))
+            {
+                byMeta[key] = new MetaInsightsHistoryCampaignCompareDto
+                {
+                    MetaCampaignId = key,
+                    CampaignName = row.CampaignName,
+                    Platform = string.IsNullOrWhiteSpace(row.Platform) ? "meta_ads" : row.Platform,
+                    LocalCampaignId = row.LocalCampaignId
+                };
+            }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(byMeta[key].CampaignName) && !string.IsNullOrWhiteSpace(row.CampaignName))
+                    byMeta[key].CampaignName = row.CampaignName;
+                if (string.IsNullOrWhiteSpace(byMeta[key].Platform) && !string.IsNullOrWhiteSpace(row.Platform))
+                    byMeta[key].Platform = row.Platform;
+            }
+        }
+
+        foreach (var row in rowsA)
+        {
+            Ensure(row);
+            byMeta[row.MetaCampaignId].WeekA = MapSnapshotMetrics(row);
+        }
+
+        foreach (var row in rowsB)
+        {
+            Ensure(row);
+            byMeta[row.MetaCampaignId].WeekB = MapSnapshotMetrics(row);
+        }
+
+        var campaigns = byMeta.Values
+            .OrderBy(c => c.CampaignName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var c in campaigns)
+            c.Delta = DiffMetrics(c.WeekA, c.WeekB);
+
+        var totalsA = SumMetrics(campaigns.Select(c => c.WeekA));
+        var totalsB = SumMetrics(campaigns.Select(c => c.WeekB));
+
+        return new MetaInsightsHistoryResponse
+        {
+            Weeks = weekLabels,
+            WeekA = a.Value.ToString("yyyy-MM-dd"),
+            WeekB = b.Value.ToString("yyyy-MM-dd"),
+            Campaigns = campaigns,
+            TotalsWeekA = totalsA,
+            TotalsWeekB = totalsB,
+            TotalsDelta = DiffMetrics(totalsA, totalsB)
+        };
+    }
+
+    private async Task TrySnapshotBeforeDeleteAsync(
+        Guid orgId,
+        CampaignActionTarget target,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(target.MetaCampaignId))
+            return;
+
+        try
+        {
+            MetaCampaignInsightsDto dto;
+            try
+            {
+                var meta = await ResolveMetaAdsContextAsync(orgId, cancellationToken);
+                var client = _httpClientFactory.CreateClient(HttpClientName);
+                dto = await FetchCampaignInsightsAsync(
+                    client,
+                    meta.ApiVersion,
+                    meta.AccessToken,
+                    target.MetaCampaignId,
+                    "maximum",
+                    cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Could not fetch live insights before delete for Meta campaign {MetaCampaignId}; saving leads-only snapshot.",
+                    target.MetaCampaignId);
+                dto = new MetaCampaignInsightsDto
+                {
+                    Empty = true,
+                    DatePreset = "maximum"
+                };
+            }
+
+            dto.LocalRecordId = target.LocalRecordId;
+            dto.MetaCampaignId = target.MetaCampaignId;
+            dto.DatePreset = "maximum";
+
+            if (target.LocalRecordId is Guid localId)
+            {
+                var row = await _marketingRepo.GetByIdForTenantAsync(localId, orgId.ToString("D"), cancellationToken)
+                          ?? await _marketingRepo.GetByIdAsync(localId, cancellationToken);
+                if (row != null && !string.IsNullOrWhiteSpace(row.CampaignName))
+                    dto.CampaignName = row.CampaignName;
+            }
+
+            await TryPersistInsightsSnapshotAsync(orgId, dto, source: "delete", cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Failed to persist delete snapshot for Meta campaign {MetaCampaignId}.",
+                target.MetaCampaignId);
+        }
+    }
+
+    private async Task TryPersistInsightsSnapshotAsync(
+        Guid orgId,
+        MetaCampaignInsightsDto dto,
+        string source,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(dto.MetaCampaignId))
+            return;
+
+        try
+        {
+            var leads = 0;
+            var platform = "meta_ads";
+            if (dto.LocalRecordId is Guid localId)
+            {
+                var campaign = await _sourcingRepository.GetCampaignByIdAsync(orgId, localId);
+                if (campaign != null)
+                {
+                    leads = campaign.LeadsCount;
+                    if (!string.IsNullOrWhiteSpace(campaign.Platform))
+                        platform = NormalizeSnapshotPlatform(campaign.Platform);
+                }
+            }
+
+            decimal? costPerCandidate = null;
+            if (leads > 0 && dto.Spend is decimal spend)
+                costPerCandidate = Math.Round(spend / leads, 6);
+
+            var weekStart = WeekStartMondayUtc(DateTime.UtcNow);
+            var row = new MarketingMetaInsightsSnapshotRow
+            {
+                Id = Guid.NewGuid(),
+                TenantId = orgId.ToString("D"),
+                SnapshotWeekStart = weekStart.ToDateTime(TimeOnly.MinValue),
+                LocalCampaignId = dto.LocalRecordId,
+                MetaCampaignId = dto.MetaCampaignId.Trim(),
+                CampaignName = string.IsNullOrWhiteSpace(dto.CampaignName) ? dto.MetaCampaignId : dto.CampaignName.Trim(),
+                Platform = platform,
+                DatePreset = string.IsNullOrWhiteSpace(dto.DatePreset) ? "maximum" : dto.DatePreset.Trim(),
+                DateStart = dto.DateStart,
+                DateStop = dto.DateStop,
+                Impressions = dto.Impressions,
+                Reach = dto.Reach,
+                Clicks = dto.Clicks,
+                InlineLinkClicks = dto.InlineLinkClicks,
+                Spend = dto.Spend,
+                Cpc = dto.Cpc,
+                Cpm = dto.Cpm,
+                Ctr = dto.Ctr,
+                MetaLeads = dto.MetaLeads,
+                CostPerLead = dto.CostPerLead,
+                NexthireLeadsCount = leads,
+                CostPerCandidate = costPerCandidate,
+                Source = source,
+                CapturedAtUtc = DateTime.UtcNow
+            };
+
+            await _insightsSnapshots.UpsertAsync(row, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Failed to upsert insights snapshot for Meta campaign {MetaCampaignId} (source={Source}).",
+                dto.MetaCampaignId,
+                source);
+        }
+    }
+
+    private static DateOnly WeekStartMondayUtc(DateTime utcNow)
+    {
+        var d = DateOnly.FromDateTime(utcNow);
+        var diff = ((int)d.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
+        return d.AddDays(-diff);
+    }
+
+    private static string NormalizeSnapshotPlatform(string platform)
+    {
+        var s = platform.Trim().ToLowerInvariant().Replace(' ', '_');
+        if (s == "meta" ||
+            s == "meta_ads" ||
+            s == "facebook_ads" ||
+            s == "instagram_ads" ||
+            s.StartsWith("meta_", StringComparison.Ordinal))
+            return "meta_ads";
+        if (s.Contains("tiktok", StringComparison.Ordinal))
+            return "tiktok_ads";
+        if (s.Contains("linkedin", StringComparison.Ordinal))
+            return "linkedin_ads";
+        return string.IsNullOrWhiteSpace(s) ? "meta_ads" : s;
+    }
+
+    private static DateOnly? ParseWeekStart(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        return DateOnly.TryParse(value.Trim(), out var d) ? d : null;
+    }
+
+    private static MetaInsightsSnapshotMetricsDto MapSnapshotMetrics(MarketingMetaInsightsSnapshotRow row) =>
+        new()
+        {
+            Spend = row.Spend,
+            Impressions = row.Impressions,
+            Reach = row.Reach,
+            Clicks = row.Clicks,
+            InlineLinkClicks = row.InlineLinkClicks,
+            Cpc = row.Cpc,
+            Cpm = row.Cpm,
+            Ctr = row.Ctr,
+            MetaLeads = row.MetaLeads,
+            CostPerLead = row.CostPerLead,
+            NexthireLeadsCount = row.NexthireLeadsCount,
+            CostPerCandidate = row.CostPerCandidate,
+            DatePreset = row.DatePreset,
+            CapturedAtUtc = row.CapturedAtUtc.ToString("O"),
+            Source = row.Source
+        };
+
+    private static MetaInsightsSnapshotMetricsDto? DiffMetrics(
+        MetaInsightsSnapshotMetricsDto? a,
+        MetaInsightsSnapshotMetricsDto? b)
+    {
+        if (a == null && b == null) return null;
+        return new MetaInsightsSnapshotMetricsDto
+        {
+            Spend = (a?.Spend ?? 0) - (b?.Spend ?? 0),
+            Impressions = (a?.Impressions ?? 0) - (b?.Impressions ?? 0),
+            Reach = (a?.Reach ?? 0) - (b?.Reach ?? 0),
+            Clicks = (a?.Clicks ?? 0) - (b?.Clicks ?? 0),
+            InlineLinkClicks = (a?.InlineLinkClicks ?? 0) - (b?.InlineLinkClicks ?? 0),
+            Cpc = NullableDiff(a?.Cpc, b?.Cpc),
+            Cpm = NullableDiff(a?.Cpm, b?.Cpm),
+            Ctr = NullableDiff(a?.Ctr, b?.Ctr),
+            MetaLeads = (a?.MetaLeads ?? 0) - (b?.MetaLeads ?? 0),
+            CostPerLead = NullableDiff(a?.CostPerLead, b?.CostPerLead),
+            NexthireLeadsCount = (a?.NexthireLeadsCount ?? 0) - (b?.NexthireLeadsCount ?? 0),
+            CostPerCandidate = NullableDiff(a?.CostPerCandidate, b?.CostPerCandidate)
+        };
+    }
+
+    private static decimal? NullableDiff(decimal? a, decimal? b)
+    {
+        if (a == null && b == null) return null;
+        return (a ?? 0) - (b ?? 0);
+    }
+
+    private static MetaInsightsSnapshotMetricsDto? SumMetrics(IEnumerable<MetaInsightsSnapshotMetricsDto?> rows)
+    {
+        var list = rows.Where(r => r != null).Cast<MetaInsightsSnapshotMetricsDto>().ToList();
+        if (list.Count == 0) return null;
+
+        var spend = list.Sum(r => r.Spend ?? 0);
+        var leads = list.Sum(r => r.NexthireLeadsCount);
+        return new MetaInsightsSnapshotMetricsDto
+        {
+            Spend = spend,
+            Impressions = list.Sum(r => r.Impressions ?? 0),
+            Reach = list.Sum(r => r.Reach ?? 0),
+            Clicks = list.Sum(r => r.Clicks ?? 0),
+            InlineLinkClicks = list.Sum(r => r.InlineLinkClicks ?? 0),
+            MetaLeads = list.Sum(r => r.MetaLeads ?? 0),
+            NexthireLeadsCount = leads,
+            CostPerCandidate = leads > 0 ? Math.Round(spend / leads, 6) : null
         };
     }
 
@@ -2146,6 +2613,9 @@ Output rules:
     {
         var target = await ResolveCampaignActionTargetAsync(orgId, campaignRef, cancellationToken);
 
+        // Final historical snapshot before Meta/local rows disappear.
+        await TrySnapshotBeforeDeleteAsync(orgId, target, cancellationToken);
+
         if (!string.IsNullOrWhiteSpace(target.MetaCampaignId))
         {
             try
@@ -2190,6 +2660,252 @@ Output rules:
             throw new InvalidOperationException(
                 $"Meta campaign was removed remotely but sourcing_campaigns row {id} could not be deleted.");
         }
+    }
+
+    public async Task<PublishFacebookPagePostResponse> PublishCampaignPagePostAsync(
+        Guid orgId,
+        string campaignRef,
+        PublishFacebookPagePostRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var message = (request.Message ?? string.Empty).Trim();
+        var link = (request.Link ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(message))
+            throw new ArgumentException("Post message is required.");
+        if (string.IsNullOrWhiteSpace(link) || !Uri.TryCreate(link, UriKind.Absolute, out var linkUri) ||
+            (linkUri.Scheme != Uri.UriSchemeHttp && linkUri.Scheme != Uri.UriSchemeHttps))
+            throw new ArgumentException("A valid http(s) destination link is required.");
+
+        var target = await ResolveCampaignActionTargetAsync(orgId, campaignRef, cancellationToken);
+        MetaMarketingCampaignDto? marketing = null;
+        if (target.LocalRecordId is Guid localId)
+            marketing = await GetMarketingCampaignAsync(orgId, localId, cancellationToken);
+
+        var imageBase64 = NormalizeImageBase64(request.ImageBase64)
+                          ?? NormalizeImageBase64(marketing?.ImageBase64);
+        var contentType = string.IsNullOrWhiteSpace(request.ImageContentType)
+            ? (string.IsNullOrWhiteSpace(marketing?.ImageContentType) ? "image/jpeg" : marketing!.ImageContentType!.Trim())
+            : request.ImageContentType.Trim();
+
+        if (string.IsNullOrWhiteSpace(imageBase64))
+            throw new ArgumentException("Creative image is required to publish the Page post.");
+
+        byte[] imageBytes;
+        try
+        {
+            imageBytes = Convert.FromBase64String(imageBase64);
+        }
+        catch (FormatException ex)
+        {
+            throw new ArgumentException("Creative image base64 is invalid.", ex);
+        }
+
+        if (imageBytes.Length == 0)
+            throw new ArgumentException("Creative image is empty.");
+
+        var meta = await ResolveMetaAdsContextAsync(orgId, cancellationToken);
+        var client = _httpClientFactory.CreateClient(HttpClientName);
+
+        string pageToken;
+        try
+        {
+            pageToken = await ResolvePageAccessTokenAsync(
+                client,
+                meta.ApiVersion,
+                meta.AccessToken,
+                meta.PageId,
+                cancellationToken);
+        }
+        catch (MetaGraphApiException ex) when (IsPagePublishPermissionError(ex))
+        {
+            throw WrapPagePublishPermissionError(ex);
+        }
+
+        var caption = $"{message}\n\n{link}";
+        try
+        {
+            var postId = await PublishPagePhotoAsync(
+                client,
+                meta.ApiVersion,
+                meta.PageId,
+                pageToken,
+                imageBytes,
+                contentType,
+                caption,
+                cancellationToken);
+
+            return new PublishFacebookPagePostResponse
+            {
+                PostId = postId,
+                PageId = meta.PageId,
+                PermalinkUrl = string.IsNullOrWhiteSpace(postId)
+                    ? null
+                    : $"https://www.facebook.com/{postId.Replace("_", "/posts/")}"
+            };
+        }
+        catch (MetaGraphApiException ex) when (IsPagePublishPermissionError(ex))
+        {
+            throw WrapPagePublishPermissionError(ex);
+        }
+    }
+
+    private async Task<string> ResolvePageAccessTokenAsync(
+        HttpClient client,
+        string version,
+        string userOrSystemToken,
+        string pageId,
+        CancellationToken cancellationToken)
+    {
+        var path = "me/accounts?fields=id,name,access_token&limit=100";
+        var url = BuildGraphUrl(version, path, userOrSystemToken);
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        using var response = await client.SendAsync(request, cancellationToken);
+        var payload = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+            throw await ParseMetaErrorAsync(response, payload, cancellationToken);
+
+        using var doc = JsonDocument.Parse(payload);
+        var availablePageIds = new List<string>();
+        if (doc.RootElement.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in data.EnumerateArray())
+            {
+                var id = item.TryGetProperty("id", out var idNode) ? idNode.GetString() : null;
+                var token = item.TryGetProperty("access_token", out var tokNode) ? tokNode.GetString() : null;
+                if (!string.IsNullOrWhiteSpace(id))
+                    availablePageIds.Add(id.Trim());
+
+                if (!string.IsNullOrWhiteSpace(id) &&
+                    string.Equals(id.Trim(), pageId.Trim(), StringComparison.Ordinal) &&
+                    !string.IsNullOrWhiteSpace(token))
+                {
+                    return token.Trim();
+                }
+            }
+        }
+
+        // Stored token may already be a Page token (system user / Explorer Page token).
+        // Probe it: if /me returns the configured PageId, keep using it.
+        if (await TokenLooksLikeConfiguredPageAsync(client, version, userOrSystemToken, pageId, cancellationToken))
+        {
+            _logger.LogInformation(
+                "Using stored AccessToken as Page token for PageId={PageId} (not found under /me/accounts).",
+                pageId);
+            return userOrSystemToken.Trim();
+        }
+
+        var available = availablePageIds.Count == 0
+            ? "(none — token may lack pages_show_list, or no Pages were granted in the Facebook login dialog)"
+            : string.Join(", ", availablePageIds);
+        var userMsg =
+            $"Configured PageId in Sources is '{pageId.Trim()}', but this token only has access to: {available}. " +
+            "Update PageId in Sources to one of those IDs, or regenerate the token and grant that Page.";
+        throw new MetaGraphApiException(
+            $"Could not resolve a Page access token for PageId '{pageId.Trim()}'. Pages available: {available}.",
+            (int)HttpStatusCode.Forbidden,
+            200,
+            "Missing Facebook Page permissions",
+            userMsg);
+    }
+
+    private static async Task<bool> TokenLooksLikeConfiguredPageAsync(
+        HttpClient client,
+        string version,
+        string accessToken,
+        string pageId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var url = BuildGraphUrl(version, "me?fields=id", accessToken);
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            using var response = await client.SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+                return false;
+            var payload = await response.Content.ReadAsStringAsync(cancellationToken);
+            using var doc = JsonDocument.Parse(payload);
+            var meId = doc.RootElement.TryGetProperty("id", out var idNode) ? idNode.GetString() : null;
+            return !string.IsNullOrWhiteSpace(meId)
+                   && string.Equals(meId.Trim(), pageId.Trim(), StringComparison.Ordinal);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private async Task<string> PublishPagePhotoAsync(
+        HttpClient client,
+        string version,
+        string pageId,
+        string pageAccessToken,
+        byte[] imageBytes,
+        string contentType,
+        string caption,
+        CancellationToken cancellationToken)
+    {
+        var ext = contentType.Contains("png", StringComparison.OrdinalIgnoreCase) ? "png"
+            : contentType.Contains("webp", StringComparison.OrdinalIgnoreCase) ? "webp"
+            : "jpg";
+        var fileName = $"nexthire-page-post.{ext}";
+        var mime = string.IsNullOrWhiteSpace(contentType) ? "image/jpeg" : contentType;
+
+        using var stream = new MemoryStream(imageBytes);
+        using var fileContent = new StreamContent(stream);
+        fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse(mime);
+
+        using var form = new MultipartFormDataContent();
+        form.Add(fileContent, "source", fileName);
+        form.Add(new StringContent(caption), "caption");
+        form.Add(new StringContent("true"), "published");
+
+        var url = BuildGraphUrl(version, $"{pageId.Trim()}/photos", pageAccessToken);
+        using var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = form };
+        using var response = await client.SendAsync(request, cancellationToken);
+        var payload = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+            throw await ParseMetaErrorAsync(response, payload, cancellationToken);
+
+        using var doc = JsonDocument.Parse(payload);
+        var postId =
+            (doc.RootElement.TryGetProperty("post_id", out var postNode) ? postNode.GetString() : null)
+            ?? (doc.RootElement.TryGetProperty("id", out var idNode) ? idNode.GetString() : null);
+
+        if (string.IsNullOrWhiteSpace(postId))
+            throw new MetaGraphApiException("Meta did not return a post id for the Page photo.", (int)response.StatusCode);
+
+        return postId.Trim();
+    }
+
+    private static bool IsPagePublishPermissionError(MetaGraphApiException ex)
+    {
+        if (ex.MetaCode is 10 or 200 or 190 or 294)
+            return true;
+        var hay = $"{ex.Message} {ex.MetaErrorUserMsg} {ex.MetaErrorUserTitle}".ToLowerInvariant();
+        return hay.Contains("permission", StringComparison.Ordinal)
+               || hay.Contains("pages_manage_posts", StringComparison.Ordinal)
+               || hay.Contains("(#200)", StringComparison.Ordinal)
+               || hay.Contains("(#10)", StringComparison.Ordinal);
+    }
+
+    private static MetaGraphApiException WrapPagePublishPermissionError(MetaGraphApiException ex)
+    {
+        var detail = string.IsNullOrWhiteSpace(ex.MetaErrorUserMsg)
+            ? ex.Message
+            : ex.MetaErrorUserMsg;
+        return new MetaGraphApiException(
+            "The Meta token cannot publish to this Facebook Page. Re-authorize the Meta connection including pages_manage_posts and pages_show_list, then try again.",
+            ex.HttpStatus is >= 400 and < 600 ? ex.HttpStatus : 403,
+            ex.MetaCode,
+            "Missing Facebook Page permissions",
+            string.IsNullOrWhiteSpace(detail)
+                ? "Your Meta connection can run ads, but it is missing permission to post on the Page. Update the token permissions (pages_manage_posts) in Sources and reconnect."
+                : detail,
+            ex);
     }
 
     private static bool TryTreatMetaDeleteAsAlreadyGone(string payload)

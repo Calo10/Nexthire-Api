@@ -145,6 +145,7 @@ public class MetaAdsController : ControllerBase
     /// (any Meta Marketing API field via typed properties or ExtensionData).
     /// </summary>
     [HttpPost("campaigns")]
+    [RequestSizeLimit(30 * 1024 * 1024)]
     [ProducesResponseType(typeof(CreateMetaCampaignResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -275,6 +276,85 @@ public class MetaAdsController : ControllerBase
     }
 
     /// <summary>
+    /// Publish the campaign creative as an organic Facebook Page post (image + caption + destination link).
+    /// Requires the Meta connection token to have Page publish permissions (<c>pages_manage_posts</c>).
+    /// </summary>
+    [HttpPost("campaigns/{campaignRef}/page-post")]
+    [RequestSizeLimit(30 * 1024 * 1024)]
+    [ProducesResponseType(typeof(PublishFacebookPagePostResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public async Task<IActionResult> PublishCampaignPagePost(
+        string campaignRef,
+        [FromBody] PublishFacebookPagePostRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        if (!TryGetOrgId(out var orgId, out var unauthorized))
+            return unauthorized!;
+
+        try
+        {
+            var result = await _metaAdsService.PublishCampaignPagePostAsync(
+                orgId,
+                campaignRef,
+                request,
+                cancellationToken);
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Facebook Page post validation failed");
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Meta Ads configuration error publishing Page post");
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = ex.Message });
+        }
+        catch (MetaGraphApiException ex)
+        {
+            var permissionError = IsMetaPagePermissionError(ex);
+            _logger.LogWarning(
+                ex,
+                "Meta Graph error publishing Page post. Status={Status}, Code={Code}, PermissionError={PermissionError}",
+                ex.HttpStatus,
+                ex.MetaCode,
+                permissionError);
+            return StatusCode(
+                permissionError
+                    ? StatusCodes.Status403Forbidden
+                    : ex.HttpStatus is >= 400 and < 600
+                        ? ex.HttpStatus
+                        : StatusCodes.Status502BadGateway,
+                new
+                {
+                    error = ex.Message,
+                    metaCode = ex.MetaCode,
+                    metaErrorUserTitle = ex.MetaErrorUserTitle,
+                    metaErrorUserMsg = ex.MetaErrorUserMsg,
+                    permissionError
+                });
+        }
+    }
+
+    private static bool IsMetaPagePermissionError(MetaGraphApiException ex)
+    {
+        if (ex.MetaCode is 10 or 200 or 190 or 294)
+            return true;
+        var hay = $"{ex.Message} {ex.MetaErrorUserMsg} {ex.MetaErrorUserTitle}".ToLowerInvariant();
+        return hay.Contains("permission", StringComparison.Ordinal)
+               || hay.Contains("pages_manage_posts", StringComparison.Ordinal)
+               || hay.Contains("(#200)", StringComparison.Ordinal)
+               || hay.Contains("(#10)", StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Live Meta Ad Account status (payment / disable / active).
     /// </summary>
     [HttpGet("ad-account/status")]
@@ -295,7 +375,7 @@ public class MetaAdsController : ControllerBase
 
     /// <summary>
     /// Live Meta Ads Insights for all org Meta campaigns (spend, impressions, reach, clicks, etc.).
-    /// Fetched from Graph API — not stored in DB.
+    /// Also upserts a weekly historical snapshot (hybrid — no scheduler).
     /// </summary>
     [HttpGet("insights")]
     [ProducesResponseType(typeof(MetaCampaignInsightsListResponse), StatusCodes.Status200OK)]
@@ -313,6 +393,25 @@ public class MetaAdsController : ControllerBase
         return await ExecuteMetaInsightsAction(
             ct => _metaAdsService.ListCampaignInsightsAsync(orgId, datePreset, ct),
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Historical week-over-week Meta insights vs NextHire leads / Cost per Candidate.
+    /// Snapshots are written on insights fetch and on campaign delete.
+    /// </summary>
+    [HttpGet("insights/history")]
+    [ProducesResponseType(typeof(MetaInsightsHistoryResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetInsightsHistory(
+        [FromQuery] string? weekA,
+        [FromQuery] string? weekB,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetOrgId(out var orgId, out var unauthorized))
+            return unauthorized!;
+
+        var result = await _metaAdsService.GetInsightsHistoryAsync(orgId, weekA, weekB, cancellationToken);
+        return Ok(result);
     }
 
     /// <summary>

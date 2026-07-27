@@ -235,6 +235,7 @@ builder.Services.AddScoped<IWhatsAppInboundRepository, WhatsAppInboundRepository
 builder.Services.AddScoped<ISourcingLeadFitScoringAgent, SourcingLeadFitScoringAgent>();
 builder.Services.AddScoped<ISourcingService, SourcingService>();
 builder.Services.AddScoped<IMarketingMetaCampaignRepository, MarketingMetaCampaignRepository>();
+builder.Services.AddScoped<IMarketingMetaInsightsSnapshotRepository, MarketingMetaInsightsSnapshotRepository>();
 builder.Services.AddHttpClient("MetaGraph", client =>
 {
     client.Timeout = TimeSpan.FromMinutes(5);
@@ -413,6 +414,7 @@ app.MapControllers();
 
 await Task.WhenAll(
     EnsureMarketingMetaCampaignsSchemaAsync(app.Services),
+    EnsureMarketingMetaInsightsSnapshotsSchemaAsync(app.Services),
     EnsureSourcingCampaignsSchemaAsync(app.Services),
     EnsureSourcingSourceTypesAsync(app.Services),
     EnsureWhatsAppTenantMappingsAsync(app.Services),
@@ -542,6 +544,22 @@ static async Task EnsureMarketingMetaCampaignsSchemaAsync(IServiceProvider servi
         logger.LogError(
             ex,
             "Failed to ensure marketing_meta_campaigns schema. Meta campaign creates may fail to persist locally.");
+    }
+}
+
+static async Task EnsureMarketingMetaInsightsSnapshotsSchemaAsync(IServiceProvider services)
+{
+    using var scope = services.CreateScope();
+    var repo = scope.ServiceProvider.GetRequiredService<IMarketingMetaInsightsSnapshotRepository>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        await repo.EnsureSchemaAsync();
+        logger.LogInformation("marketing_meta_insights_snapshots table is ready.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to ensure marketing_meta_insights_snapshots schema.");
     }
 }
 

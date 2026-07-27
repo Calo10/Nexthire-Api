@@ -9,6 +9,12 @@ public interface IMarketingMetaCampaignRepository
 
     Task InsertAsync(MarketingMetaCampaignRow row, CancellationToken cancellationToken = default);
 
+    Task<bool> UpdateImageAsync(
+        Guid id,
+        string imageBase64,
+        string? imageContentType,
+        CancellationToken cancellationToken = default);
+
     Task<MarketingMetaCampaignRow?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
     Task<MarketingMetaCampaignRow?> GetByMetaCampaignIdAsync(
@@ -56,6 +62,9 @@ public sealed class MarketingMetaCampaignRow
     public string? WhatsappMessage { get; init; }
     public string AdText { get; init; } = string.Empty;
     public string ImageHash { get; init; } = string.Empty;
+    /// <summary>Creative image bytes as base64 (local archive; Meta still uses <see cref="ImageHash"/>).</summary>
+    public string? ImageBase64 { get; init; }
+    public string? ImageContentType { get; init; }
     public string? MetaCampaignId { get; init; }
     public string? MetaAdsetId { get; init; }
     public string? MetaCreativeId { get; init; }
@@ -94,6 +103,8 @@ BEGIN
         whatsapp_message NVARCHAR(MAX) NULL,
         ad_text NVARCHAR(MAX) NOT NULL,
         image_hash NVARCHAR(200) NOT NULL,
+        image_base64 NVARCHAR(MAX) NULL,
+        image_content_type NVARCHAR(100) NULL,
         meta_campaign_id NVARCHAR(100) NULL,
         meta_adset_id NVARCHAR(100) NULL,
         meta_creative_id NVARCHAR(100) NULL,
@@ -102,6 +113,16 @@ BEGIN
         created_at_utc DATETIME2 NOT NULL CONSTRAINT DF_marketing_meta_campaigns_created DEFAULT (SYSUTCDATETIME()),
         updated_at_utc DATETIME2 NOT NULL CONSTRAINT DF_marketing_meta_campaigns_updated DEFAULT (SYSUTCDATETIME())
     );
+END
+
+IF COL_LENGTH('dbo.marketing_meta_campaigns', 'image_base64') IS NULL
+BEGIN
+    ALTER TABLE dbo.marketing_meta_campaigns ADD image_base64 NVARCHAR(MAX) NULL;
+END
+
+IF COL_LENGTH('dbo.marketing_meta_campaigns', 'image_content_type') IS NULL
+BEGIN
+    ALTER TABLE dbo.marketing_meta_campaigns ADD image_content_type NVARCHAR(100) NULL;
 END";
 
         using var connection = _connectionFactory.CreateConnection();
@@ -119,9 +140,11 @@ END";
         const string sql = @"
 INSERT INTO dbo.marketing_meta_campaigns (
     id, tenant_id, job_id, campaign_name, destination_type, destination_url, whatsapp_message, ad_text, image_hash,
+    image_base64, image_content_type,
     meta_campaign_id, meta_adset_id, meta_creative_id, meta_ad_id, status, created_at_utc, updated_at_utc
 ) VALUES (
     @Id, @TenantId, @JobId, @CampaignName, @DestinationType, @DestinationUrl, @WhatsappMessage, @AdText, @ImageHash,
+    @ImageBase64, @ImageContentType,
     @MetaCampaignId, @MetaAdsetId, @MetaCreativeId, @MetaAdId, @Status, SYSUTCDATETIME(), SYSUTCDATETIME()
 );";
 
@@ -141,6 +164,35 @@ INSERT INTO dbo.marketing_meta_campaigns (
             databaseName);
     }
 
+    public async Task<bool> UpdateImageAsync(
+        Guid id,
+        string imageBase64,
+        string? imageContentType,
+        CancellationToken cancellationToken = default)
+    {
+        await EnsureSchemaAsync(cancellationToken);
+
+        const string sql = @"
+UPDATE dbo.marketing_meta_campaigns
+SET image_base64 = @ImageBase64,
+    image_content_type = @ImageContentType,
+    updated_at_utc = SYSUTCDATETIME()
+WHERE id = @Id;";
+
+        using var connection = _connectionFactory.CreateConnection();
+        var n = await connection.ExecuteAsync(
+            new CommandDefinition(
+                sql,
+                new
+                {
+                    Id = id,
+                    ImageBase64 = imageBase64,
+                    ImageContentType = imageContentType
+                },
+                cancellationToken: cancellationToken));
+        return n == 1;
+    }
+
     public async Task<MarketingMetaCampaignRow?> GetByIdAsync(
         Guid id,
         CancellationToken cancellationToken = default)
@@ -156,6 +208,8 @@ SELECT
     whatsapp_message AS WhatsappMessage,
     ad_text AS AdText,
     image_hash AS ImageHash,
+    image_base64 AS ImageBase64,
+    image_content_type AS ImageContentType,
     meta_campaign_id AS MetaCampaignId,
     meta_adset_id AS MetaAdsetId,
     meta_creative_id AS MetaCreativeId,
@@ -184,6 +238,8 @@ SELECT TOP 1
     whatsapp_message AS WhatsappMessage,
     ad_text AS AdText,
     image_hash AS ImageHash,
+    image_base64 AS ImageBase64,
+    image_content_type AS ImageContentType,
     meta_campaign_id AS MetaCampaignId,
     meta_adset_id AS MetaAdsetId,
     meta_creative_id AS MetaCreativeId,
@@ -217,6 +273,8 @@ SELECT TOP 1
     whatsapp_message AS WhatsappMessage,
     ad_text AS AdText,
     image_hash AS ImageHash,
+    image_base64 AS ImageBase64,
+    image_content_type AS ImageContentType,
     meta_campaign_id AS MetaCampaignId,
     meta_adset_id AS MetaAdsetId,
     meta_creative_id AS MetaCreativeId,
@@ -250,6 +308,8 @@ SELECT TOP 1
     whatsapp_message AS WhatsappMessage,
     ad_text AS AdText,
     image_hash AS ImageHash,
+    image_base64 AS ImageBase64,
+    image_content_type AS ImageContentType,
     meta_campaign_id AS MetaCampaignId,
     meta_adset_id AS MetaAdsetId,
     meta_creative_id AS MetaCreativeId,
@@ -280,6 +340,7 @@ SELECT
     whatsapp_message AS WhatsappMessage,
     ad_text AS AdText,
     image_hash AS ImageHash,
+    image_content_type AS ImageContentType,
     meta_campaign_id AS MetaCampaignId,
     meta_adset_id AS MetaAdsetId,
     meta_creative_id AS MetaCreativeId,
@@ -314,6 +375,8 @@ SELECT
     whatsapp_message AS WhatsappMessage,
     ad_text AS AdText,
     image_hash AS ImageHash,
+    image_base64 AS ImageBase64,
+    image_content_type AS ImageContentType,
     meta_campaign_id AS MetaCampaignId,
     meta_adset_id AS MetaAdsetId,
     meta_creative_id AS MetaCreativeId,

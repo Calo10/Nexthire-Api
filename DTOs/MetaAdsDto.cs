@@ -71,6 +71,14 @@ public class CreateMetaCampaignRequest
 
     public string? WhatsappMessage { get; set; }
 
+    /// <summary>
+    /// Creative image as raw base64 (no data-URL prefix). Stored locally only — not sent to Meta Graph.
+    /// </summary>
+    public string? ImageBase64 { get; set; }
+
+    /// <summary>MIME type for <see cref="ImageBase64"/>, e.g. image/png.</summary>
+    public string? ImageContentType { get; set; }
+
     /// <summary>Ignored — local row is always saved after Meta succeeds. Kept for API compatibility.</summary>
     public bool PersistLocalRecord { get; set; } = true;
 
@@ -113,6 +121,33 @@ public class MetaMarketingCampaignActionResponse
     public string? MetaAdId { get; set; }
 }
 
+/// <summary>Publish an organic Facebook Page post from a Meta campaign creative.</summary>
+public class PublishFacebookPagePostRequest
+{
+    /// <summary>Post caption / description shown on the Page.</summary>
+    [Required]
+    [MaxLength(5000)]
+    public string Message { get; set; } = string.Empty;
+
+    /// <summary>Destination URL included in the post (usually the campaign landing link).</summary>
+    [Required]
+    [MaxLength(2000)]
+    public string Link { get; set; } = string.Empty;
+
+    /// <summary>Raw base64 creative image (no data-URL prefix). Optional if already stored on the campaign.</summary>
+    public string? ImageBase64 { get; set; }
+
+    public string? ImageContentType { get; set; }
+}
+
+public class PublishFacebookPagePostResponse
+{
+    public string PostId { get; set; } = string.Empty;
+    public string PageId { get; set; } = string.Empty;
+    public string? PermalinkUrl { get; set; }
+    public bool PermissionError { get; set; }
+}
+
 /// <summary>Row from <c>dbo.marketing_meta_campaigns</c> (not <c>sourcing_campaigns</c>).</summary>
 public class MetaMarketingCampaignDto
 {
@@ -124,6 +159,8 @@ public class MetaMarketingCampaignDto
     public string? WhatsappMessage { get; set; }
     public string AdText { get; set; } = string.Empty;
     public string ImageHash { get; set; } = string.Empty;
+    public string? ImageBase64 { get; set; }
+    public string? ImageContentType { get; set; }
     public string? MetaCampaignId { get; set; }
     public string? MetaAdSetId { get; set; }
     public string? MetaCreativeId { get; set; }
@@ -224,6 +261,49 @@ public class MetaCampaignInsightsListResponse
 {
     public string DatePreset { get; set; } = "maximum";
     public IReadOnlyList<MetaCampaignInsightsDto> Items { get; set; } = Array.Empty<MetaCampaignInsightsDto>();
+}
+
+/// <summary>One campaign's metrics for a captured week (historical snapshot).</summary>
+public class MetaInsightsSnapshotMetricsDto
+{
+    public decimal? Spend { get; set; }
+    public long? Impressions { get; set; }
+    public long? Reach { get; set; }
+    public long? Clicks { get; set; }
+    public long? InlineLinkClicks { get; set; }
+    public decimal? Cpc { get; set; }
+    public decimal? Cpm { get; set; }
+    public decimal? Ctr { get; set; }
+    public long? MetaLeads { get; set; }
+    public decimal? CostPerLead { get; set; }
+    public int NexthireLeadsCount { get; set; }
+    public decimal? CostPerCandidate { get; set; }
+    public string? DatePreset { get; set; }
+    public string? CapturedAtUtc { get; set; }
+    public string? Source { get; set; }
+}
+
+public class MetaInsightsHistoryCampaignCompareDto
+{
+    public string MetaCampaignId { get; set; } = string.Empty;
+    public string CampaignName { get; set; } = string.Empty;
+    public string Platform { get; set; } = "meta_ads";
+    public Guid? LocalCampaignId { get; set; }
+    public MetaInsightsSnapshotMetricsDto? WeekA { get; set; }
+    public MetaInsightsSnapshotMetricsDto? WeekB { get; set; }
+    public MetaInsightsSnapshotMetricsDto? Delta { get; set; }
+}
+
+public class MetaInsightsHistoryResponse
+{
+    public IReadOnlyList<string> Weeks { get; set; } = Array.Empty<string>();
+    public string? WeekA { get; set; }
+    public string? WeekB { get; set; }
+    public IReadOnlyList<MetaInsightsHistoryCampaignCompareDto> Campaigns { get; set; } =
+        Array.Empty<MetaInsightsHistoryCampaignCompareDto>();
+    public MetaInsightsSnapshotMetricsDto? TotalsWeekA { get; set; }
+    public MetaInsightsSnapshotMetricsDto? TotalsWeekB { get; set; }
+    public MetaInsightsSnapshotMetricsDto? TotalsDelta { get; set; }
 }
 
 /// <summary>Live Meta Ad Account health (payment / disable status).</summary>
