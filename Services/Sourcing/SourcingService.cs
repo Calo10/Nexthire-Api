@@ -563,13 +563,39 @@ public class SourcingService : ISourcingService
     {
         var campaign = await _sourcing.GetCampaignByIdAsync(orgId, campaignId);
         if (campaign != null)
+        {
+            await AttachMetaCreativeImageAsync(orgId, campaign, campaignId);
             return campaign;
+        }
 
         var meta = await _metaAdsService.GetMarketingCampaignAsync(orgId, campaignId);
         if (meta == null)
             return null;
 
         return MapMetaMarketingCampaignToSourcingDetail(meta);
+    }
+
+    private async Task AttachMetaCreativeImageAsync(
+        Guid orgId,
+        SourcingCampaignDetailDto campaign,
+        Guid campaignId)
+    {
+        var platform = campaign.Platform?.Trim() ?? string.Empty;
+        var isMeta =
+            platform.Equals("meta", StringComparison.OrdinalIgnoreCase) ||
+            platform.Equals("meta_ads", StringComparison.OrdinalIgnoreCase) ||
+            !string.IsNullOrWhiteSpace(campaign.ExternalCampaignId);
+        if (!isMeta)
+            return;
+
+        // Synced Meta rows share the same id as marketing_meta_campaigns.
+        // GetMarketingCampaignAsync backfills image_base64 from Meta when missing.
+        var meta = await _metaAdsService.GetMarketingCampaignAsync(orgId, campaignId);
+        if (meta == null || string.IsNullOrWhiteSpace(meta.ImageBase64))
+            return;
+
+        campaign.ImageBase64 = meta.ImageBase64;
+        campaign.ImageContentType = meta.ImageContentType;
     }
 
     private static SourcingCampaignDetailDto MapMetaMarketingCampaignToSourcingDetail(MetaMarketingCampaignDto meta) =>
@@ -583,6 +609,8 @@ public class SourcingService : ISourcingService
             Currency = SourcingConstants.DefaultCurrency,
             LandingPageUrl = meta.DestinationUrl,
             ExternalCampaignId = meta.MetaCampaignId,
+            ImageBase64 = meta.ImageBase64,
+            ImageContentType = meta.ImageContentType,
             CreatedAt = meta.CreatedAtUtc,
             UpdatedAt = meta.UpdatedAtUtc
         };
