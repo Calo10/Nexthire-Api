@@ -74,6 +74,16 @@ public interface IMetaAdsService
         string campaignRef,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Publish the campaign creative as an organic Facebook Page post (photo + caption + destination link).
+    /// Uses the same Meta connection token; derives a Page access token when possible.
+    /// </summary>
+    Task<PublishFacebookPagePostResponse> PublishCampaignPagePostAsync(
+        Guid orgId,
+        string campaignRef,
+        PublishFacebookPagePostRequest request,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Live Meta Insights for one campaign (local GUID or Meta campaign id).</summary>
     Task<MetaCampaignInsightsDto> GetCampaignInsightsAsync(
         Guid orgId,
@@ -85,6 +95,16 @@ public interface IMetaAdsService
     Task<MetaCampaignInsightsListResponse> ListCampaignInsightsAsync(
         Guid orgId,
         string? datePreset = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Week-over-week comparison from locally persisted insights snapshots
+    /// (captured on insights fetch and on campaign delete — no scheduler).
+    /// </summary>
+    Task<MetaInsightsHistoryResponse> GetInsightsHistoryAsync(
+        Guid orgId,
+        string? weekA = null,
+        string? weekB = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>Live Meta Ad Account status (active / payment issues / disabled).</summary>
