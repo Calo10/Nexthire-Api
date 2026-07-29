@@ -34,6 +34,23 @@ public class JobDto
     public DateTimeOffset UpdatedAt { get; set; }
     /// <summary>Distinct candidates with an application for this job.</summary>
     public int ApplicantsCount { get; set; }
+    /// <summary>True when the job has a saved ad design image (base64 stored on jobs).</summary>
+    public bool HasAdDesign { get; set; }
+}
+
+public class JobAdDesignDto
+{
+    public Guid JobId { get; set; }
+    public string ImageBase64 { get; set; } = string.Empty;
+    public string ImageContentType { get; set; } = "image/png";
+    public string? AdText { get; set; }
+}
+
+public class SaveJobAdDesignRequest
+{
+    public string ImageBase64 { get; set; } = string.Empty;
+    public string? ImageContentType { get; set; }
+    public string? AdText { get; set; }
 }
 
 public class CreateJobDto
