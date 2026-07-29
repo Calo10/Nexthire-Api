@@ -248,6 +248,12 @@ builder.Services.AddHttpClient("AzureOpenAI", client =>
     client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
 });
 builder.Services.AddScoped<IMetaAdsService, MetaAdsService>();
+builder.Services.AddHttpClient(CalendlyService.HttpClientName, client =>
+{
+    client.BaseAddress = new Uri("https://api.calendly.com/");
+    client.Timeout = TimeSpan.FromSeconds(60);
+});
+builder.Services.AddScoped<ICalendlyService, CalendlyService>();
 
 // Add HttpClient for NexaClient with named client
 builder.Services.AddHttpClient("Nexa", client =>

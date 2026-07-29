@@ -794,6 +794,7 @@ END";
             ("whatsapp", "WhatsApp", "Applications via WhatsApp bot"),
             ("twilio", "Twilio", "Twilio credentials for WhatsApp messaging"),
             ("meta_ads", "Meta Ads", "Applications from Meta advertising"),
+            ("calendly", "Calendly", "Meeting scheduling via Calendly"),
         };
 
         foreach (var (code, name, description) in seeds)

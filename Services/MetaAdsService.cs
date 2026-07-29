@@ -859,7 +859,7 @@ Output rules:
             return;
         }
 
-        if (destination == "job_post_url")
+        if (destination == "job_post_url" || destination == "calendly")
             ApplyWebJobPostConfiguration(adSetBody, creativeBody);
     }
 
@@ -1107,25 +1107,25 @@ Output rules:
             return;
         }
 
-        if (destination == "job_post_url")
+        if (destination == "job_post_url" || destination == "calendly")
         {
             if (string.Equals(adSetDestination, "WHATSAPP", StringComparison.OrdinalIgnoreCase))
             {
                 throw new ArgumentException(
-                    "Web job ads cannot use adSet.destinationType WHATSAPP. Set destinationType to job_post_url.");
+                    "Web job/Calendly ads cannot use adSet.destinationType WHATSAPP. Set destinationType to job_post_url or calendly.");
             }
 
             if (string.Equals(objective, "OUTCOME_ENGAGEMENT", StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(optimization, "CONVERSATIONS", StringComparison.OrdinalIgnoreCase))
             {
                 throw new ArgumentException(
-                    "Web job ads should use campaign.objective OUTCOME_TRAFFIC and adSet.optimizationGoal LINK_CLICKS, not OUTCOME_ENGAGEMENT + CONVERSATIONS.");
+                    "Web job/Calendly ads should use campaign.objective OUTCOME_TRAFFIC and adSet.optimizationGoal LINK_CLICKS, not OUTCOME_ENGAGEMENT + CONVERSATIONS.");
             }
 
             if (string.Equals(ctaType, "WHATSAPP_MESSAGE", StringComparison.OrdinalIgnoreCase))
             {
                 throw new ArgumentException(
-                    "Web job ads cannot use callToAction.type WHATSAPP_MESSAGE. Use LEARN_MORE or APPLY_NOW with a public job URL.");
+                    "Web job/Calendly ads cannot use callToAction.type WHATSAPP_MESSAGE. Use LEARN_MORE or APPLY_NOW with a public https URL.");
             }
 
             if (!string.IsNullOrWhiteSpace(link) &&
@@ -1133,7 +1133,7 @@ Output rules:
                  link.Contains("api.whatsapp.com", StringComparison.OrdinalIgnoreCase)))
             {
                 throw new ArgumentException(
-                    "Web job ads require a public https job URL in creative.objectStorySpec.linkData.link, not a WhatsApp link.");
+                    "Web job/Calendly ads require a public https URL in creative.objectStorySpec.linkData.link, not a WhatsApp link.");
             }
 
             return;
