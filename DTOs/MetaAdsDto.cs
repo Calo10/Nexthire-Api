@@ -65,8 +65,9 @@ public class CreateMetaCampaignRequest
     /// <c>whatsapp</c> = link ad to a <c>wa.me</c> URL (no Page↔WABA link required; legacy behavior).
     /// <c>whatsapp_native</c> = Meta Click-to-WhatsApp (requires Page linked to WhatsApp Business).
     /// <c>job_post_url</c> = web traffic to a public job URL.
+    /// <c>calendly</c> = web traffic to the org Calendly scheduling URL.
     /// </summary>
-    [RegularExpression("^(whatsapp|whatsapp_native|job_post_url)$")]
+    [RegularExpression("^(whatsapp|whatsapp_native|job_post_url|calendly)$")]
     public string? DestinationType { get; set; }
 
     public string? WhatsappMessage { get; set; }
