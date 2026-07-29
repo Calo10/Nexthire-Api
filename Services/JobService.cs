@@ -44,6 +44,46 @@ public class JobService : IJobService
         return await _repo.UpdateAsync(orgId, id, updateJobDto);
     }
 
+    public Task<JobAdDesignDto?> GetAdDesignAsync(Guid orgId, Guid jobId, CancellationToken cancellationToken = default)
+        => _repo.GetAdDesignAsync(orgId, jobId, cancellationToken);
+
+    public async Task<JobAdDesignDto?> SaveAdDesignAsync(
+        Guid orgId,
+        Guid jobId,
+        SaveJobAdDesignRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var raw = (request.ImageBase64 ?? string.Empty).Trim();
+        if (raw.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+        {
+            var comma = raw.IndexOf(',');
+            if (comma >= 0)
+                raw = raw[(comma + 1)..];
+        }
+
+        if (string.IsNullOrWhiteSpace(raw))
+            throw new ArgumentException("ImageBase64 is required.");
+
+        try
+        {
+            _ = Convert.FromBase64String(raw);
+        }
+        catch (FormatException ex)
+        {
+            throw new ArgumentException("ImageBase64 is invalid.", ex);
+        }
+
+        request.ImageBase64 = raw;
+        if (string.IsNullOrWhiteSpace(request.ImageContentType))
+            request.ImageContentType = "image/png";
+
+        return await _repo.SaveAdDesignAsync(orgId, jobId, request, cancellationToken);
+    }
+
+    public Task<bool> DeleteAdDesignAsync(Guid orgId, Guid jobId, CancellationToken cancellationToken = default)
+        => _repo.DeleteAdDesignAsync(orgId, jobId, cancellationToken);
+
     public async Task<(bool Deleted, bool NotFound, bool HasApplications)> DeleteJobAsync(Guid orgId, Guid id)
     {
         var existing = await _repo.GetByIdAsync(orgId, id);
