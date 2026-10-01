@@ -52,6 +52,35 @@ public class UpdateCandidateRequestDto
     public string? ResumeUrl { get; set; }
 }
 
+public class CandidateTagDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+}
+
+public class AddCandidateTagRequestDto
+{
+    [Required]
+    [StringLength(40, MinimumLength = 1)]
+    public string Name { get; set; } = string.Empty;
+}
+
+public class CandidateNoteDto
+{
+    public Guid Id { get; set; }
+    public string Body { get; set; } = string.Empty;
+    public string? CreatedByName { get; set; }
+    public string? CreatedByEmail { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+}
+
+public class AddCandidateNoteRequestDto
+{
+    [Required]
+    [StringLength(4000, MinimumLength = 1)]
+    public string Body { get; set; } = string.Empty;
+}
+
 public class CandidateDto
 {
     public Guid Id { get; set; }
@@ -63,6 +92,7 @@ public class CandidateDto
     public string? ResumeUrl { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+    public List<CandidateTagDto> Tags { get; set; } = new();
 }
 
 public class CandidateListItemDto : CandidateDto

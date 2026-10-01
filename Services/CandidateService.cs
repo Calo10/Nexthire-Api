@@ -74,6 +74,68 @@ public class CandidateService : ICandidateService
         return (deleted, !deleted, false);
     }
 
+    public Task<IReadOnlyList<CandidateTagDto>> ListTagsAsync(Guid orgId)
+    {
+        return _repo.ListTagsAsync(orgId);
+    }
+
+    public Task<(CandidateTagDto? Tag, bool NotFound, string? Error)> AddTagAsync(Guid orgId, Guid candidateId, string name)
+    {
+        var normalized = NormalizeTagName(name);
+        if (normalized == null)
+            return Task.FromResult<(CandidateTagDto?, bool, string?)>((null, false, "Tag name is required."));
+        if (normalized.Length > 40)
+            return Task.FromResult<(CandidateTagDto?, bool, string?)>((null, false, "Tag name must be 40 characters or fewer."));
+
+        return _repo.AddTagAsync(orgId, candidateId, normalized, normalized.ToLowerInvariant());
+    }
+
+    public Task<bool> RemoveTagAsync(Guid orgId, Guid candidateId, Guid tagId)
+    {
+        return _repo.RemoveTagAsync(orgId, candidateId, tagId);
+    }
+
+    public async Task<(IReadOnlyList<CandidateNoteDto>? Notes, bool NotFound)> ListNotesAsync(Guid orgId, Guid candidateId)
+    {
+        var existing = await _repo.GetByIdAsync(orgId, candidateId);
+        if (existing == null)
+            return (null, true);
+
+        var notes = await _repo.ListNotesAsync(orgId, candidateId);
+        return (notes, false);
+    }
+
+    public async Task<(CandidateNoteDto? Note, bool NotFound, string? Error)> AddNoteAsync(
+        Guid orgId,
+        Guid candidateId,
+        string body,
+        string? createdByName,
+        string? createdByEmail)
+    {
+        var trimmed = (body ?? string.Empty).Trim();
+        if (trimmed.Length == 0)
+            return (null, false, "Note is required.");
+        if (trimmed.Length > 4000)
+            return (null, false, "Note must be 4000 characters or fewer.");
+
+        var (note, notFound) = await _repo.AddNoteAsync(orgId, candidateId, trimmed, createdByName, createdByEmail);
+        return (note, notFound, null);
+    }
+
+    public Task<bool> DeleteNoteAsync(Guid orgId, Guid candidateId, Guid noteId)
+    {
+        return _repo.DeleteNoteAsync(orgId, candidateId, noteId);
+    }
+
+    private static string? NormalizeTagName(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return null;
+
+        var parts = raw.Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 0 ? null : string.Join(' ', parts);
+    }
+
     private static string NormalizeEmail(string email)
     {
         return (email ?? string.Empty).Trim().ToLowerInvariant();

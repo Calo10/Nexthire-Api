@@ -1,4 +1,5 @@
 using System.Data;
+using System.Data.SqlClient;
 using Dapper;
 using nexthire_api.Data;
 using nexthire_api.DTOs;
@@ -7,6 +8,10 @@ namespace nexthire_api.Repositories;
 
 public class CandidateRepository : ICandidateRepository
 {
+    private const int MaxTagsPerCandidate = 20;
+    private static int _tagsSchemaReady;
+    private static int _notesSchemaReady;
+
     private readonly IDbConnectionFactory _connectionFactory;
     private readonly ILogger<CandidateRepository> _logger;
 
@@ -28,6 +33,9 @@ public class CandidateRepository : ICandidateRepository
         string dir)
     {
         var trimmedSearch = string.IsNullOrWhiteSpace(search) ? null : search.Trim();
+        var phoneDigits = trimmedSearch == null
+            ? string.Empty
+            : new string(trimmedSearch.Where(char.IsDigit).ToArray());
         var trimmedSource = string.IsNullOrWhiteSpace(source) ? null : source.Trim();
 
         var sortNormalized = string.IsNullOrWhiteSpace(sort) ? "created_at" : sort.Trim().ToLowerInvariant();
@@ -42,6 +50,8 @@ public class CandidateRepository : ICandidateRepository
             _ => throw new ArgumentException("Unsupported sort direction. Allowed: asc, desc", nameof(dir))
         };
 
+        await EnsureTagsSchemaAsync();
+
         var offset = (page - 1) * pageSize;
 
         var sql = $@"
@@ -55,7 +65,13 @@ public class CandidateRepository : ICandidateRepository
                     @search IS NULL
                     OR LOWER(c.first_name) LIKE '%' + LOWER(@search) + '%'
                     OR LOWER(c.last_name) LIKE '%' + LOWER(@search) + '%'
+                    OR LOWER(CONCAT(c.first_name, ' ', c.last_name)) LIKE '%' + LOWER(@search) + '%'
                     OR LOWER(c.email) LIKE '%' + LOWER(@search) + '%'
+                    OR LOWER(ISNULL(c.phone, '')) LIKE '%' + LOWER(@search) + '%'
+                    OR (
+                         @phoneDigits <> ''
+                         AND REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ISNULL(c.phone, ''), ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') LIKE '%' + @phoneDigits + '%'
+                       )
                   );
 
             SELECT
@@ -77,25 +93,37 @@ public class CandidateRepository : ICandidateRepository
                     @search IS NULL
                     OR LOWER(c.first_name) LIKE '%' + LOWER(@search) + '%'
                     OR LOWER(c.last_name) LIKE '%' + LOWER(@search) + '%'
+                    OR LOWER(CONCAT(c.first_name, ' ', c.last_name)) LIKE '%' + LOWER(@search) + '%'
                     OR LOWER(c.email) LIKE '%' + LOWER(@search) + '%'
+                    OR LOWER(ISNULL(c.phone, '')) LIKE '%' + LOWER(@search) + '%'
+                    OR (
+                         @phoneDigits <> ''
+                         AND REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ISNULL(c.phone, ''), ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') LIKE '%' + @phoneDigits + '%'
+                       )
                   )
             ORDER BY c.created_at {orderDir}, c.id {orderDir}
             OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY;";
 
         using var connection = _connectionFactory.CreateConnection();
-        using var multi = await connection.QueryMultipleAsync(sql, new
+        int total;
+        List<CandidateListItemDto> items;
+        using (var multi = await connection.QueryMultipleAsync(sql, new
         {
             orgId,
             search = trimmedSearch,
+            phoneDigits,
             source = trimmedSource,
             from,
             to,
             offset,
             pageSize
-        });
+        }))
+        {
+            total = await multi.ReadSingleAsync<int>();
+            items = (await multi.ReadAsync<CandidateListItemDto>()).ToList();
+        }
 
-        var total = await multi.ReadSingleAsync<int>();
-        var items = (await multi.ReadAsync<CandidateListItemDto>()).ToList();
+        await AttachTagsAsync(connection, orgId, items);
 
         return new PagedResult<CandidateListItemDto>
         {
@@ -122,8 +150,15 @@ public class CandidateRepository : ICandidateRepository
             FROM candidates c
             WHERE c.org_id = @orgId AND c.id = @id;";
 
+        await EnsureTagsSchemaAsync();
+
         using var connection = _connectionFactory.CreateConnection();
-        return await connection.QueryFirstOrDefaultAsync<CandidateDto>(sql, new { orgId, id });
+        var candidate = await connection.QueryFirstOrDefaultAsync<CandidateDto>(sql, new { orgId, id });
+        if (candidate == null)
+            return null;
+
+        await AttachTagsAsync(connection, orgId, new[] { candidate });
+        return candidate;
     }
 
     public async Task<CandidateDto?> GetByEmailAsync(Guid orgId, string emailLower)
@@ -272,7 +307,7 @@ public class CandidateRepository : ICandidateRepository
             WHERE c.org_id = @OrgId AND c.id = @Id;";
 
         using var connection = _connectionFactory.CreateConnection();
-        return await connection.QueryFirstOrDefaultAsync<CandidateDto>(sql, new
+        var candidate = await connection.QueryFirstOrDefaultAsync<CandidateDto>(sql, new
         {
             OrgId = orgId,
             Id = id,
@@ -283,6 +318,9 @@ public class CandidateRepository : ICandidateRepository
             dto.Source,
             dto.ResumeUrl
         });
+        if (candidate != null)
+            await AttachTagsAsync(connection, orgId, new[] { candidate });
+        return candidate;
     }
 
     public async Task<bool> HasApplicationsAsync(Guid orgId, Guid candidateId)
@@ -301,10 +339,350 @@ public class CandidateRepository : ICandidateRepository
 
     public async Task<bool> DeleteAsync(Guid orgId, Guid id)
     {
-        const string sql = @"DELETE FROM candidates WHERE org_id = @orgId AND id = @id;";
+        const string sql = @"
+            IF OBJECT_ID(N'dbo.candidate_notes', N'U') IS NOT NULL
+                DELETE FROM candidate_notes WHERE org_id = @orgId AND candidate_id = @id;
+            DELETE FROM candidate_tag_assignments WHERE org_id = @orgId AND candidate_id = @id;
+            DELETE FROM candidates WHERE org_id = @orgId AND id = @id;";
         using var connection = _connectionFactory.CreateConnection();
         var affected = await connection.ExecuteAsync(sql, new { orgId, id });
         return affected > 0;
+    }
+
+    public async Task EnsureTagsSchemaAsync()
+    {
+        if (Volatile.Read(ref _tagsSchemaReady) == 1)
+            return;
+
+        const string sql = @"
+IF OBJECT_ID(N'dbo.candidate_tags', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.candidate_tags
+    (
+        id UNIQUEIDENTIFIER NOT NULL CONSTRAINT PK_candidate_tags PRIMARY KEY,
+        org_id UNIQUEIDENTIFIER NOT NULL,
+        name NVARCHAR(40) NOT NULL,
+        normalized_name NVARCHAR(40) NOT NULL,
+        created_at DATETIMEOFFSET NOT NULL CONSTRAINT DF_candidate_tags_created DEFAULT (TODATETIMEOFFSET(SYSUTCDATETIME(), '+00:00')),
+        CONSTRAINT UQ_candidate_tags_org_name UNIQUE (org_id, normalized_name)
+    );
+    CREATE INDEX IX_candidate_tags_org ON dbo.candidate_tags (org_id);
+END
+
+IF OBJECT_ID(N'dbo.candidate_tag_assignments', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.candidate_tag_assignments
+    (
+        org_id UNIQUEIDENTIFIER NOT NULL,
+        candidate_id UNIQUEIDENTIFIER NOT NULL,
+        tag_id UNIQUEIDENTIFIER NOT NULL,
+        created_at DATETIMEOFFSET NOT NULL CONSTRAINT DF_candidate_tag_assignments_created DEFAULT (TODATETIMEOFFSET(SYSUTCDATETIME(), '+00:00')),
+        CONSTRAINT PK_candidate_tag_assignments PRIMARY KEY (candidate_id, tag_id),
+        CONSTRAINT FK_candidate_tag_assignments_tag FOREIGN KEY (tag_id) REFERENCES dbo.candidate_tags (id) ON DELETE CASCADE
+    );
+    CREATE INDEX IX_candidate_tag_assignments_org_candidate ON dbo.candidate_tag_assignments (org_id, candidate_id);
+END
+
+IF OBJECT_ID(N'dbo.candidates', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_candidate_tag_assignments_candidate')
+   AND EXISTS (
+        SELECT 1
+        FROM sys.indexes i
+        INNER JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+        INNER JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+        WHERE i.object_id = OBJECT_ID(N'dbo.candidates')
+          AND i.is_primary_key = 1
+          AND c.name = N'id'
+   )
+BEGIN
+    ALTER TABLE dbo.candidate_tag_assignments
+        ADD CONSTRAINT FK_candidate_tag_assignments_candidate
+        FOREIGN KEY (candidate_id) REFERENCES dbo.candidates (id) ON DELETE CASCADE;
+END";
+
+        using var connection = _connectionFactory.CreateConnection();
+        await connection.ExecuteAsync(sql);
+        Volatile.Write(ref _tagsSchemaReady, 1);
+    }
+
+    public async Task<IReadOnlyList<CandidateTagDto>> ListTagsAsync(Guid orgId)
+    {
+        await EnsureTagsSchemaAsync();
+        const string sql = @"
+            SELECT id AS Id, name AS Name
+            FROM candidate_tags
+            WHERE org_id = @orgId
+            ORDER BY name;";
+
+        using var connection = _connectionFactory.CreateConnection();
+        var tags = await connection.QueryAsync<CandidateTagDto>(sql, new { orgId });
+        return tags.ToList();
+    }
+
+    public async Task<(CandidateTagDto? Tag, bool CandidateNotFound, string? Error)> AddTagAsync(
+        Guid orgId,
+        Guid candidateId,
+        string name,
+        string normalizedName)
+    {
+        await EnsureTagsSchemaAsync();
+
+        using var connection = _connectionFactory.CreateConnection();
+        connection.Open();
+        using var tx = connection.BeginTransaction();
+
+        var candidateExists = await connection.ExecuteScalarAsync<int>(
+            @"SELECT CASE WHEN EXISTS (
+                  SELECT 1 FROM candidates WHERE org_id = @orgId AND id = @candidateId
+              ) THEN 1 ELSE 0 END;",
+            new { orgId, candidateId },
+            tx);
+        if (candidateExists != 1)
+        {
+            tx.Rollback();
+            return (null, true, null);
+        }
+
+        var tag = await connection.QueryFirstOrDefaultAsync<CandidateTagDto>(
+            @"SELECT id AS Id, name AS Name
+              FROM candidate_tags
+              WHERE org_id = @orgId AND normalized_name = @normalizedName;",
+            new { orgId, normalizedName },
+            tx);
+
+        if (tag == null)
+        {
+            try
+            {
+                tag = await connection.QuerySingleAsync<CandidateTagDto>(
+                    @"INSERT INTO candidate_tags (id, org_id, name, normalized_name, created_at)
+                      OUTPUT INSERTED.id AS Id, INSERTED.name AS Name
+                      VALUES (@id, @orgId, @name, @normalizedName, TODATETIMEOFFSET(SYSUTCDATETIME(), '+00:00'));",
+                    new { id = Guid.NewGuid(), orgId, name, normalizedName },
+                    tx);
+            }
+            catch (SqlException ex) when (ex.Number is 2601 or 2627)
+            {
+                tag = await connection.QuerySingleAsync<CandidateTagDto>(
+                    @"SELECT id AS Id, name AS Name
+                      FROM candidate_tags
+                      WHERE org_id = @orgId AND normalized_name = @normalizedName;",
+                    new { orgId, normalizedName },
+                    tx);
+            }
+        }
+
+        var alreadyAssigned = await connection.ExecuteScalarAsync<int>(
+            @"SELECT CASE WHEN EXISTS (
+                  SELECT 1 FROM candidate_tag_assignments
+                  WHERE candidate_id = @candidateId AND tag_id = @tagId
+              ) THEN 1 ELSE 0 END;",
+            new { candidateId, tagId = tag.Id },
+            tx);
+        if (alreadyAssigned != 1)
+        {
+            var count = await connection.ExecuteScalarAsync<int>(
+                @"SELECT COUNT(1) FROM candidate_tag_assignments
+                  WHERE org_id = @orgId AND candidate_id = @candidateId;",
+                new { orgId, candidateId },
+                tx);
+            if (count >= MaxTagsPerCandidate)
+            {
+                tx.Rollback();
+                return (null, false, $"A candidate can have at most {MaxTagsPerCandidate} tags.");
+            }
+
+            await connection.ExecuteAsync(
+                @"INSERT INTO candidate_tag_assignments (org_id, candidate_id, tag_id, created_at)
+                  VALUES (@orgId, @candidateId, @tagId, TODATETIMEOFFSET(SYSUTCDATETIME(), '+00:00'));",
+                new { orgId, candidateId, tagId = tag.Id },
+                tx);
+        }
+
+        tx.Commit();
+        return (tag, false, null);
+    }
+
+    public async Task<bool> RemoveTagAsync(Guid orgId, Guid candidateId, Guid tagId)
+    {
+        await EnsureTagsSchemaAsync();
+
+        using var connection = _connectionFactory.CreateConnection();
+        var candidateExists = await connection.ExecuteScalarAsync<int>(
+            @"SELECT CASE WHEN EXISTS (
+                  SELECT 1 FROM candidates WHERE org_id = @orgId AND id = @candidateId
+              ) THEN 1 ELSE 0 END;",
+            new { orgId, candidateId });
+        if (candidateExists != 1)
+            return false;
+
+        await connection.ExecuteAsync(
+            @"DELETE FROM candidate_tag_assignments
+              WHERE org_id = @orgId AND candidate_id = @candidateId AND tag_id = @tagId;",
+            new { orgId, candidateId, tagId });
+        return true;
+    }
+
+    public async Task EnsureNotesSchemaAsync()
+    {
+        if (Volatile.Read(ref _notesSchemaReady) == 1)
+            return;
+
+        const string sql = @"
+IF OBJECT_ID(N'dbo.candidate_notes', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.candidate_notes
+    (
+        id UNIQUEIDENTIFIER NOT NULL CONSTRAINT PK_candidate_notes PRIMARY KEY,
+        org_id UNIQUEIDENTIFIER NOT NULL,
+        candidate_id UNIQUEIDENTIFIER NOT NULL,
+        body NVARCHAR(4000) NOT NULL,
+        created_by_name NVARCHAR(400) NULL,
+        created_by_email NVARCHAR(640) NULL,
+        created_at DATETIMEOFFSET NOT NULL CONSTRAINT DF_candidate_notes_created DEFAULT (TODATETIMEOFFSET(SYSUTCDATETIME(), '+00:00'))
+    );
+    CREATE INDEX IX_candidate_notes_org_candidate ON dbo.candidate_notes (org_id, candidate_id, created_at DESC);
+END
+
+IF OBJECT_ID(N'dbo.candidates', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_candidate_notes_candidate')
+   AND EXISTS (
+        SELECT 1
+        FROM sys.indexes i
+        INNER JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+        INNER JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+        WHERE i.object_id = OBJECT_ID(N'dbo.candidates')
+          AND i.is_primary_key = 1
+          AND c.name = N'id'
+   )
+BEGIN
+    ALTER TABLE dbo.candidate_notes
+        ADD CONSTRAINT FK_candidate_notes_candidate
+        FOREIGN KEY (candidate_id) REFERENCES dbo.candidates (id) ON DELETE CASCADE;
+END";
+
+        using var connection = _connectionFactory.CreateConnection();
+        await connection.ExecuteAsync(sql);
+        Volatile.Write(ref _notesSchemaReady, 1);
+    }
+
+    public async Task<IReadOnlyList<CandidateNoteDto>> ListNotesAsync(Guid orgId, Guid candidateId)
+    {
+        await EnsureNotesSchemaAsync();
+        const string sql = @"
+            SELECT
+                id AS Id,
+                body AS Body,
+                created_by_name AS CreatedByName,
+                created_by_email AS CreatedByEmail,
+                created_at AS CreatedAt
+            FROM candidate_notes
+            WHERE org_id = @orgId AND candidate_id = @candidateId
+            ORDER BY created_at DESC, id DESC;";
+
+        using var connection = _connectionFactory.CreateConnection();
+        var notes = await connection.QueryAsync<CandidateNoteDto>(sql, new { orgId, candidateId });
+        return notes.ToList();
+    }
+
+    public async Task<(CandidateNoteDto? Note, bool CandidateNotFound)> AddNoteAsync(
+        Guid orgId,
+        Guid candidateId,
+        string body,
+        string? createdByName,
+        string? createdByEmail)
+    {
+        await EnsureNotesSchemaAsync();
+
+        using var connection = _connectionFactory.CreateConnection();
+        var candidateExists = await connection.ExecuteScalarAsync<int>(
+            @"SELECT CASE WHEN EXISTS (
+                  SELECT 1 FROM candidates WHERE org_id = @orgId AND id = @candidateId
+              ) THEN 1 ELSE 0 END;",
+            new { orgId, candidateId });
+        if (candidateExists != 1)
+            return (null, true);
+
+        var note = await connection.QuerySingleAsync<CandidateNoteDto>(
+            @"INSERT INTO candidate_notes (id, org_id, candidate_id, body, created_by_name, created_by_email, created_at)
+              OUTPUT
+                  INSERTED.id AS Id,
+                  INSERTED.body AS Body,
+                  INSERTED.created_by_name AS CreatedByName,
+                  INSERTED.created_by_email AS CreatedByEmail,
+                  INSERTED.created_at AS CreatedAt
+              VALUES (@id, @orgId, @candidateId, @body, @createdByName, @createdByEmail, TODATETIMEOFFSET(SYSUTCDATETIME(), '+00:00'));",
+            new
+            {
+                id = Guid.NewGuid(),
+                orgId,
+                candidateId,
+                body,
+                createdByName,
+                createdByEmail
+            });
+
+        return (note, false);
+    }
+
+    public async Task<bool> DeleteNoteAsync(Guid orgId, Guid candidateId, Guid noteId)
+    {
+        await EnsureNotesSchemaAsync();
+
+        using var connection = _connectionFactory.CreateConnection();
+        var candidateExists = await connection.ExecuteScalarAsync<int>(
+            @"SELECT CASE WHEN EXISTS (
+                  SELECT 1 FROM candidates WHERE org_id = @orgId AND id = @candidateId
+              ) THEN 1 ELSE 0 END;",
+            new { orgId, candidateId });
+        if (candidateExists != 1)
+            return false;
+
+        await connection.ExecuteAsync(
+            @"DELETE FROM candidate_notes
+              WHERE org_id = @orgId AND candidate_id = @candidateId AND id = @noteId;",
+            new { orgId, candidateId, noteId });
+        return true;
+    }
+
+    private static async Task AttachTagsAsync<T>(IDbConnection connection, Guid orgId, IReadOnlyList<T> candidates)
+        where T : CandidateDto
+    {
+        if (candidates.Count == 0)
+            return;
+
+        const string sql = @"
+            SELECT
+                a.candidate_id AS CandidateId,
+                t.id AS Id,
+                t.name AS Name
+            FROM candidate_tag_assignments a
+            INNER JOIN candidate_tags t ON t.id = a.tag_id AND t.org_id = a.org_id
+            WHERE a.org_id = @orgId
+              AND a.candidate_id IN @ids
+            ORDER BY t.name;";
+
+        var rows = (await connection.QueryAsync<CandidateTagLinkRow>(sql, new
+        {
+            orgId,
+            ids = candidates.Select(c => c.Id).ToArray()
+        })).ToList();
+
+        var byCandidate = rows
+            .GroupBy(r => r.CandidateId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(r => new CandidateTagDto { Id = r.Id, Name = r.Name }).ToList());
+
+        foreach (var candidate in candidates)
+            candidate.Tags = byCandidate.TryGetValue(candidate.Id, out var tags) ? tags : new List<CandidateTagDto>();
+    }
+
+    private sealed class CandidateTagLinkRow
+    {
+        public Guid CandidateId { get; set; }
+        public Guid Id { get; set; }
+        public string Name { get; set; } = string.Empty;
     }
 }
 
