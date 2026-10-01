@@ -34,5 +34,26 @@ public interface ICandidateRepository
     Task<bool> HasApplicationsAsync(Guid orgId, Guid candidateId);
 
     Task<bool> DeleteAsync(Guid orgId, Guid id);
+
+    Task EnsureTagsSchemaAsync();
+
+    Task<IReadOnlyList<CandidateTagDto>> ListTagsAsync(Guid orgId);
+
+    Task<(CandidateTagDto? Tag, bool CandidateNotFound, string? Error)> AddTagAsync(Guid orgId, Guid candidateId, string name, string normalizedName);
+
+    Task<bool> RemoveTagAsync(Guid orgId, Guid candidateId, Guid tagId);
+
+    Task EnsureNotesSchemaAsync();
+
+    Task<IReadOnlyList<CandidateNoteDto>> ListNotesAsync(Guid orgId, Guid candidateId);
+
+    Task<(CandidateNoteDto? Note, bool CandidateNotFound)> AddNoteAsync(
+        Guid orgId,
+        Guid candidateId,
+        string body,
+        string? createdByName,
+        string? createdByEmail);
+
+    Task<bool> DeleteNoteAsync(Guid orgId, Guid candidateId, Guid noteId);
 }
 
