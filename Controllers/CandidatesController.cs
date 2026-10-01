@@ -108,6 +108,191 @@ public class CandidatesController : ControllerBase
     }
 
     /// <summary>
+    /// Tags available in the current organization.
+    /// </summary>
+    [HttpGet("tags")]
+    public async Task<ActionResult<IReadOnlyList<CandidateTagDto>>> ListTags()
+    {
+        try
+        {
+            var orgId = ClaimUtils.RequireOrgId(User);
+            _ = ClaimUtils.RequireUserId(User);
+            var tags = await _candidateService.ListTagsAsync(orgId);
+            return Ok(tags);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            LogClaimsShapeForDebug();
+            return Unauthorized(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error listing candidate tags");
+            return StatusCode(500, new { message = "An error occurred while retrieving tags" });
+        }
+    }
+
+    /// <summary>
+    /// Add a tag to a candidate. Reuses an existing org tag when the name matches, ignoring case.
+    /// </summary>
+    [HttpPost("{id:guid}/tags")]
+    public async Task<ActionResult<CandidateTagDto>> AddTag(Guid id, [FromBody] AddCandidateTagRequestDto dto)
+    {
+        try
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var orgId = ClaimUtils.RequireOrgId(User);
+            _ = ClaimUtils.RequireUserId(User);
+
+            var (tag, notFound, error) = await _candidateService.AddTagAsync(orgId, id, dto.Name);
+            if (notFound)
+                return NotFound(new { message = $"Candidate with ID {id} not found" });
+            if (error != null)
+                return BadRequest(new { message = error });
+
+            return Ok(tag);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            LogClaimsShapeForDebug();
+            return Unauthorized(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error adding tag to candidate {CandidateId}", id);
+            return StatusCode(500, new { message = "An error occurred while adding the tag" });
+        }
+    }
+
+    /// <summary>
+    /// Remove a tag from a candidate. The tag stays available for the organization.
+    /// </summary>
+    [HttpDelete("{id:guid}/tags/{tagId:guid}")]
+    public async Task<IActionResult> RemoveTag(Guid id, Guid tagId)
+    {
+        try
+        {
+            var orgId = ClaimUtils.RequireOrgId(User);
+            _ = ClaimUtils.RequireUserId(User);
+
+            var removed = await _candidateService.RemoveTagAsync(orgId, id, tagId);
+            if (!removed)
+                return NotFound(new { message = $"Candidate with ID {id} not found" });
+
+            return NoContent();
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            LogClaimsShapeForDebug();
+            return Unauthorized(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error removing tag {TagId} from candidate {CandidateId}", tagId, id);
+            return StatusCode(500, new { message = "An error occurred while removing the tag" });
+        }
+    }
+
+    /// <summary>
+    /// Notes written on a candidate.
+    /// </summary>
+    [HttpGet("{id:guid}/notes")]
+    public async Task<ActionResult<IReadOnlyList<CandidateNoteDto>>> ListNotes(Guid id)
+    {
+        try
+        {
+            var orgId = ClaimUtils.RequireOrgId(User);
+            _ = ClaimUtils.RequireUserId(User);
+
+            var (notes, notFound) = await _candidateService.ListNotesAsync(orgId, id);
+            if (notFound)
+                return NotFound(new { message = $"Candidate with ID {id} not found" });
+
+            return Ok(notes);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            LogClaimsShapeForDebug();
+            return Unauthorized(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error listing notes for candidate {CandidateId}", id);
+            return StatusCode(500, new { message = "An error occurred while retrieving notes" });
+        }
+    }
+
+    /// <summary>
+    /// Add a note to a candidate.
+    /// </summary>
+    [HttpPost("{id:guid}/notes")]
+    public async Task<ActionResult<CandidateNoteDto>> AddNote(Guid id, [FromBody] AddCandidateNoteRequestDto dto)
+    {
+        try
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var orgId = ClaimUtils.RequireOrgId(User);
+            _ = ClaimUtils.RequireUserId(User);
+
+            var (note, notFound, error) = await _candidateService.AddNoteAsync(
+                orgId,
+                id,
+                dto.Body,
+                ClaimUtils.GetDisplayName(User),
+                ClaimUtils.GetEmail(User));
+            if (notFound)
+                return NotFound(new { message = $"Candidate with ID {id} not found" });
+            if (error != null)
+                return BadRequest(new { message = error });
+
+            return Ok(note);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            LogClaimsShapeForDebug();
+            return Unauthorized(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error adding note to candidate {CandidateId}", id);
+            return StatusCode(500, new { message = "An error occurred while adding the note" });
+        }
+    }
+
+    /// <summary>
+    /// Delete a note from a candidate.
+    /// </summary>
+    [HttpDelete("{id:guid}/notes/{noteId:guid}")]
+    public async Task<IActionResult> DeleteNote(Guid id, Guid noteId)
+    {
+        try
+        {
+            var orgId = ClaimUtils.RequireOrgId(User);
+            _ = ClaimUtils.RequireUserId(User);
+
+            var deleted = await _candidateService.DeleteNoteAsync(orgId, id, noteId);
+            if (!deleted)
+                return NotFound(new { message = $"Candidate with ID {id} not found" });
+
+            return NoContent();
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            LogClaimsShapeForDebug();
+            return Unauthorized(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting note {NoteId} from candidate {CandidateId}", noteId, id);
+            return StatusCode(500, new { message = "An error occurred while deleting the note" });
+        }
+    }
+
+    /// <summary>
     /// Get candidate by ID (org-scoped)
     /// </summary>
     [HttpGet("{id}")]

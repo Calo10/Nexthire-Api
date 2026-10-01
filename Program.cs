@@ -425,7 +425,8 @@ await Task.WhenAll(
     EnsureSourcingSourceTypesAsync(app.Services),
     EnsureWhatsAppTenantMappingsAsync(app.Services),
     EnsureNhUsersSchemaAsync(app.Services),
-    EnsureNexaUserTokensSchemaAsync(app.Services));
+    EnsureNexaUserTokensSchemaAsync(app.Services),
+    EnsureCandidateTagsSchemaAsync(app.Services));
 
 app.Lifetime.ApplicationStarted.Register(() =>
 {
@@ -516,6 +517,24 @@ static async Task EnsureNexaUserTokensSchemaAsync(IServiceProvider services)
     catch (Exception ex)
     {
         logger.LogError(ex, "Failed to ensure nexa_user_tokens schema. Org invites may fail after API restart.");
+    }
+}
+
+static async Task EnsureCandidateTagsSchemaAsync(IServiceProvider services)
+{
+    using var scope = services.CreateScope();
+    var repo = scope.ServiceProvider.GetRequiredService<ICandidateRepository>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        await repo.EnsureTagsSchemaAsync();
+        await repo.EnsureNotesSchemaAsync();
+        logger.LogInformation("candidate_tags schema is ready.");
+        logger.LogInformation("candidate_notes schema is ready.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to ensure candidate_tags schema.");
     }
 }
 
