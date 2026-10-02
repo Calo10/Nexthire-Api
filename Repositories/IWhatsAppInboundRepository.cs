@@ -14,6 +14,10 @@ public interface IWhatsAppInboundRepository
 
     Task EnsureTenantMappingsSchemaAsync(CancellationToken cancellationToken = default);
 
+    Task EnsureConversationReadSchemaAsync(CancellationToken cancellationToken = default);
+
+    Task<bool> MarkConversationReadAsync(Guid conversationId, string tenantId, CancellationToken cancellationToken = default);
+
     Task SyncTenantMappingsFromConfigAsync(IConfiguration configuration, CancellationToken cancellationToken = default);
 
     Task<Guid?> LookupOrgIdByMessengerTenantAsync(string messengerTenant, CancellationToken cancellationToken = default);
@@ -33,6 +37,9 @@ public interface IWhatsAppInboundRepository
         CancellationToken cancellationToken);
 
     Task MarkNeedsHumanAsync(Guid conversationId, CancellationToken cancellationToken);
+
+    /// <summary>False only when a recruiter has taken over (bot_enabled explicitly 0). Null stays enabled.</summary>
+    Task<bool> IsConversationBotEnabledAsync(Guid conversationId, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<WhatsAppConversationListItemDto>> GetConversationsAsync(string tenantId, string? status);
 

@@ -49,11 +49,18 @@ public static class TwilioSourceConnectionConfigParser
         if (string.IsNullOrWhiteSpace(fromNumber))
             throw new ArgumentException("Twilio config_json is missing DefaultFromWhatsAppNumber.");
 
+        var contentSid = ReadString(root,
+            "Twilio:DefaultWhatsAppContentSid",
+            "twilio:DefaultWhatsAppContentSid",
+            "defaultWhatsAppContentSid",
+            "DefaultWhatsAppContentSid");
+
         return new TwilioOrgCredentials
         {
             AccountSid = accountSid.Trim(),
             AuthToken = authToken.Trim(),
-            DefaultFromWhatsAppNumber = fromNumber.Trim()
+            DefaultFromWhatsAppNumber = fromNumber.Trim(),
+            DefaultWhatsAppContentSid = string.IsNullOrWhiteSpace(contentSid) ? null : contentSid.Trim()
         };
     }
 

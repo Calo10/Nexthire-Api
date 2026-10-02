@@ -21,6 +21,7 @@ public interface INexaClient
     Task<IReadOnlyList<NexaOrgInviteDto>> ListOrgInvitesAsync(Guid orgId, string nexaAccessToken, CancellationToken cancellationToken = default);
     Task<bool> RevokeOrgInviteAsync(Guid orgId, Guid inviteId, string nexaAccessToken, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<NexaOrgMemberDto>> ListOrgMembersAsync(Guid orgId, string nexaAccessToken, CancellationToken cancellationToken = default);
+    Task<NexaOrganizationDetailDto?> GetOrganizationAsync(Guid orgId, string nexaAccessToken, CancellationToken cancellationToken = default);
     Task<NexaProvisionOrganizationResponse> ProvisionOrganizationAsync(
         string name,
         string timezone,
@@ -798,6 +799,32 @@ public class NexaClient : INexaClient
         }
 
         return JsonSerializer.Deserialize<List<NexaOrgMemberDto>>(responseContent, JsonOptions) ?? [];
+    }
+
+    public async Task<NexaOrganizationDetailDto?> GetOrganizationAsync(
+        Guid orgId,
+        string nexaAccessToken,
+        CancellationToken cancellationToken = default)
+    {
+        var requestUrl = $"/v1/orgs/{orgId}";
+        var requestMessage = new HttpRequestMessage(HttpMethod.Get, requestUrl);
+        requestMessage.Headers.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", nexaAccessToken);
+        if (!string.IsNullOrEmpty(_apiKey))
+            requestMessage.Headers.Add("X-Nexa-Api-Key", _apiKey);
+
+        var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
+        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning(
+                "Nexa get organization failed. OrgId={OrgId} Status={Status}",
+                orgId, response.StatusCode);
+            throw new HttpRequestException($"Nexa API returned error: {response.StatusCode}");
+        }
+
+        return JsonSerializer.Deserialize<NexaOrganizationDetailDto>(responseContent, JsonOptions);
     }
 
     public async Task<NexaProvisionOrganizationResponse> ProvisionOrganizationAsync(

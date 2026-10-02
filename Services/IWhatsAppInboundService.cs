@@ -8,6 +8,8 @@ public interface IWhatsAppInboundService
 
     Task<IReadOnlyList<WhatsAppConversationListItemDto>> GetConversationsAsync(string tenantId, string? status);
 
+    Task<bool> MarkConversationReadAsync(Guid conversationId, string tenantId, CancellationToken cancellationToken = default);
+
     Task<WhatsAppCandidateConversationDto?> GetConversationByCandidateAsync(string tenantId, Guid candidateId);
 
     Task<IReadOnlyList<WhatsAppConversationMessageDto>> GetConversationMessagesAsync(Guid conversationId, string tenantId);
@@ -19,6 +21,12 @@ public interface IWhatsAppInboundService
 
     Task<SendWhatsAppMessageResponseDto> SendDirectMessageAsync(
         SendDirectWhatsAppMessageRequestDto request,
+        CancellationToken cancellationToken);
+
+    Task<SendWhatsAppIntroductionResponseDto> SendIntroductionAsync(
+        Guid orgId,
+        Guid nexaUserId,
+        Guid candidateId,
         CancellationToken cancellationToken);
 
     Task<bool> UpdateConversationAsync(

@@ -14,6 +14,8 @@ public class WhatsAppConversationListItemDto
     public string? Status { get; set; }
     public bool BotEnabled { get; set; }
     public DateTimeOffset? LastMessageAtUtc { get; set; }
+    public string? LastMessageBody { get; set; }
+    public int UnreadCount { get; set; }
 }
 
 public class WhatsAppConversationMessageDto
@@ -54,6 +56,19 @@ public class SendDirectWhatsAppMessageRequestDto
     public string To { get; set; } = string.Empty;
 
     [Required]
+    public string Body { get; set; } = string.Empty;
+}
+
+public class SendWhatsAppIntroductionRequestDto
+{
+    [Required]
+    public Guid CandidateId { get; set; }
+}
+
+public class SendWhatsAppIntroductionResponseDto
+{
+    public Guid MessageId { get; set; }
+    public string Status { get; set; } = "sent";
     public string Body { get; set; } = string.Empty;
 }
 

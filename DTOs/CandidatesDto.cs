@@ -90,6 +90,7 @@ public class CandidateDto
     public string? Phone { get; set; }
     public string? Source { get; set; }
     public string? ResumeUrl { get; set; }
+    public string? DynamicAnswersJson { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public List<CandidateTagDto> Tags { get; set; } = new();
