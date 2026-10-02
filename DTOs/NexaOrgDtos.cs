@@ -1,5 +1,11 @@
 namespace nexthire_api.DTOs;
 
+public class NexaOrganizationDetailDto
+{
+    public Guid OrganizationId { get; set; }
+    public string Name { get; set; } = string.Empty;
+}
+
 public class NexaOrgMemberDto
 {
     public Guid MemberId { get; set; }

@@ -1,6 +1,9 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using nexthire_api.DTOs;
+using nexthire_api.Exceptions;
 using nexthire_api.Services;
+using nexthire_api.Security;
 
 namespace nexthire_api.Controllers;
 
@@ -49,6 +52,19 @@ public class WhatsAppInboxController : ControllerBase
             return NotFound(new { message = "No WhatsApp conversation found for this candidate." });
 
         return Ok(result);
+    }
+
+    [HttpPost("{conversationId:guid}/read")]
+    public async Task<IActionResult> MarkRead(Guid conversationId, [FromQuery] string tenantId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(tenantId))
+            return BadRequest(new { message = "tenantId is required." });
+
+        var updated = await _service.MarkConversationReadAsync(conversationId, tenantId.Trim(), cancellationToken);
+        if (!updated)
+            return NotFound(new { message = "Conversation not found." });
+
+        return Ok(new { read = true });
     }
 
     [HttpGet("{conversationId:guid}/messages")]
@@ -115,6 +131,41 @@ public class WhatsAppInboxController : ControllerBase
         {
             _logger.LogError(ex, "Failed to send direct WhatsApp message. TenantId: {TenantId}, CandidateId: {CandidateId}", request.TenantId, request.CandidateId);
             return StatusCode(500, new { message = "Failed to send WhatsApp message." });
+        }
+    }
+
+    [HttpPost("send-introduction")]
+    [Authorize]
+    public async Task<ActionResult<SendWhatsAppIntroductionResponseDto>> SendIntroduction(
+        [FromBody] SendWhatsAppIntroductionRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        if (request == null || request.CandidateId == Guid.Empty)
+            return BadRequest(new { message = "candidateId is required." });
+
+        try
+        {
+            var orgId = ClaimUtils.RequireOrgId(User);
+            var nexaUserId = ClaimUtils.RequireNexaUserId(User);
+            var response = await _service.SendIntroductionAsync(orgId, nexaUserId, request.CandidateId, cancellationToken);
+            return Ok(response);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized(new { message = "Missing or invalid organization or user identity." });
+        }
+        catch (WhatsAppIntroductionException ex)
+        {
+            _logger.LogWarning(
+                "WhatsApp introduction rejected. Status={Status} Reason={Reason}",
+                ex.StatusCode,
+                ex.Message);
+            return StatusCode(ex.StatusCode, new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "WhatsApp introduction failed. CandidateId={CandidateId}", request.CandidateId);
+            return StatusCode(500, new { message = "Failed to send WhatsApp introduction." });
         }
     }
 

@@ -8,6 +8,73 @@ namespace nexthire_api.Repositories;
 
 public class ApplicationsRepository : IApplicationsRepository
 {
+    /// <summary>
+    /// One pass over sourcing_leads for the org (or job), then a join.
+    /// The previous OUTER APPLY scanned leads once per application and compared emails with LOWER, which cannot use an index.
+    /// </summary>
+    private const string FitScoreJoin = @"
+            LEFT JOIN (
+                SELECT ranked.application_id, ranked.fit_score
+                FROM (
+                    SELECT
+                        match.application_id,
+                        match.fit_score,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY match.application_id
+                            ORDER BY match.priority, match.updated_at DESC
+                        ) AS rn
+                    FROM (
+                        SELECT
+                            sl.converted_application_id AS application_id,
+                            sl.fit_score,
+                            sl.updated_at,
+                            0 AS priority
+                        FROM sourcing_leads sl
+                        WHERE sl.org_id = @orgId
+                          AND sl.converted_application_id IS NOT NULL
+                          AND (@jobId IS NULL OR sl.job_id = @jobId)
+
+                        UNION ALL
+
+                        SELECT
+                            a2.id,
+                            sl.fit_score,
+                            sl.updated_at,
+                            1
+                        FROM sourcing_leads sl
+                        INNER JOIN applications a2
+                            ON a2.org_id = sl.org_id
+                           AND a2.job_id = sl.job_id
+                           AND a2.candidate_id = sl.converted_candidate_id
+                        WHERE sl.org_id = @orgId
+                          AND sl.converted_candidate_id IS NOT NULL
+                          AND (@jobId IS NULL OR sl.job_id = @jobId)
+
+                        UNION ALL
+
+                        SELECT
+                            a2.id,
+                            sl.fit_score,
+                            sl.updated_at,
+                            2
+                        FROM sourcing_leads sl
+                        INNER JOIN candidates c2
+                            ON c2.org_id = sl.org_id
+                           AND c2.email = sl.email
+                        INNER JOIN applications a2
+                            ON a2.org_id = sl.org_id
+                           AND a2.job_id = sl.job_id
+                           AND a2.candidate_id = c2.id
+                        WHERE sl.org_id = @orgId
+                          AND sl.email IS NOT NULL
+                          AND sl.converted_application_id IS NULL
+                          AND sl.converted_candidate_id IS NULL
+                          AND (@jobId IS NULL OR sl.job_id = @jobId)
+                    ) match
+                ) ranked
+                WHERE ranked.rn = 1
+            ) leadFit ON leadFit.application_id = a.id";
+
     private readonly IDbConnectionFactory _connectionFactory;
     private readonly IUserRepository _users;
     private readonly ILogger<ApplicationsRepository> _logger;
@@ -366,9 +433,9 @@ public class ApplicationsRepository : IApplicationsRepository
         return await connection.QueryFirstOrDefaultAsync<ApplicationListItemDto>(sql, new { orgId, applicationId });
     }
 
-    public async Task<IReadOnlyList<ApplicationCardDto>> GetKanbanCardsAsync(Guid orgId, Guid jobId)
+    public async Task<IReadOnlyList<ApplicationCardDto>> GetKanbanCardsAsync(Guid orgId, Guid? jobId)
     {
-        const string sql = @"
+        var sql = @"
             SELECT
                 a.id AS Id,
                 a.candidate_id AS CandidateId,
@@ -383,26 +450,13 @@ public class ApplicationsRepository : IApplicationsRepository
             FROM applications a
             INNER JOIN jobs j ON j.id = a.job_id AND j.org_id = @orgId
             INNER JOIN candidates c ON c.id = a.candidate_id AND c.org_id = @orgId
-            OUTER APPLY (
-                SELECT TOP (1) sl.fit_score
-                FROM sourcing_leads sl
-                WHERE sl.org_id = a.org_id
-                  AND sl.job_id = a.job_id
-                  AND (
-                      sl.converted_application_id = a.id
-                      OR sl.converted_candidate_id = a.candidate_id
-                      OR (sl.email IS NOT NULL AND LOWER(sl.email) = LOWER(c.email))
-                  )
-                ORDER BY
-                    CASE
-                        WHEN sl.converted_application_id = a.id THEN 0
-                        WHEN sl.converted_candidate_id = a.candidate_id THEN 1
-                        ELSE 2
-                    END,
-                    sl.updated_at DESC
-            ) leadFit
-            WHERE a.org_id = @orgId AND a.job_id = @jobId
-            ORDER BY a.created_at DESC;";
+            " + FitScoreJoin + @"
+            WHERE a.org_id = @orgId";
+
+        if (jobId is Guid id && id != Guid.Empty)
+            sql += " AND a.job_id = @jobId";
+
+        sql += " ORDER BY a.created_at DESC;";
 
         using var connection = _connectionFactory.CreateConnection();
         var rows = await connection.QueryAsync<ApplicationCardDto>(sql, new { orgId, jobId });
@@ -426,28 +480,11 @@ public class ApplicationsRepository : IApplicationsRepository
             FROM applications a
             INNER JOIN jobs j ON j.id = a.job_id AND j.org_id = @orgId
             INNER JOIN candidates c ON c.id = a.candidate_id AND c.org_id = @orgId
-            OUTER APPLY (
-                SELECT TOP (1) sl.fit_score
-                FROM sourcing_leads sl
-                WHERE sl.org_id = a.org_id
-                  AND sl.job_id = a.job_id
-                  AND (
-                      sl.converted_application_id = a.id
-                      OR sl.converted_candidate_id = a.candidate_id
-                      OR (sl.email IS NOT NULL AND LOWER(sl.email) = LOWER(c.email))
-                  )
-                ORDER BY
-                    CASE
-                        WHEN sl.converted_application_id = a.id THEN 0
-                        WHEN sl.converted_candidate_id = a.candidate_id THEN 1
-                        ELSE 2
-                    END,
-                    sl.updated_at DESC
-            ) leadFit
+            " + FitScoreJoin + @"
             WHERE a.org_id = @orgId AND a.id = @applicationId;";
 
         using var connection = _connectionFactory.CreateConnection();
-        return await connection.QueryFirstOrDefaultAsync<ApplicationCardDto>(sql, new { orgId, applicationId });
+        return await connection.QueryFirstOrDefaultAsync<ApplicationCardDto>(sql, new { orgId, applicationId, jobId = (Guid?)null });
     }
 
     public async Task<ApplicationCardDto> CreateKanbanAsync(Guid orgId, Guid jobId, Guid candidateId, Guid currentStageId, string status, IDbTransaction? transaction = null)
@@ -480,24 +517,7 @@ public class ApplicationsRepository : IApplicationsRepository
             FROM applications a
             INNER JOIN jobs j ON j.id = a.job_id AND j.org_id = @OrgId
             INNER JOIN candidates c ON c.id = a.candidate_id AND c.org_id = @OrgId
-            OUTER APPLY (
-                SELECT TOP (1) sl.fit_score
-                FROM sourcing_leads sl
-                WHERE sl.org_id = a.org_id
-                  AND sl.job_id = a.job_id
-                  AND (
-                      sl.converted_application_id = a.id
-                      OR sl.converted_candidate_id = a.candidate_id
-                      OR (sl.email IS NOT NULL AND LOWER(sl.email) = LOWER(c.email))
-                  )
-                ORDER BY
-                    CASE
-                        WHEN sl.converted_application_id = a.id THEN 0
-                        WHEN sl.converted_candidate_id = a.candidate_id THEN 1
-                        ELSE 2
-                    END,
-                    sl.updated_at DESC
-            ) leadFit
+            " + FitScoreJoin + @"
             WHERE a.org_id = @OrgId AND a.id = @Id;";
 
         var connection = transaction?.Connection ?? _connectionFactory.CreateConnection();
@@ -514,6 +534,8 @@ public class ApplicationsRepository : IApplicationsRepository
             {
                 Id = id,
                 OrgId = orgId,
+                orgId,
+                jobId,
                 JobId = jobId,
                 CandidateId = candidateId,
                 CurrentStageId = currentStageId,
@@ -631,6 +653,59 @@ public class ApplicationsRepository : IApplicationsRepository
             if (ownsConnection)
                 connection.Dispose();
         }
+    }
+
+    public async Task EnsureListIndexesAsync()
+    {
+        const string sql = @"
+IF OBJECT_ID(N'dbo.applications', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_applications_org_job_created' AND object_id = OBJECT_ID(N'dbo.applications'))
+    CREATE INDEX IX_applications_org_job_created
+        ON dbo.applications (org_id, job_id, created_at DESC)
+        INCLUDE (candidate_id, current_stage_id, status, applied_at);
+
+IF OBJECT_ID(N'dbo.applications', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_applications_org_candidate_updated' AND object_id = OBJECT_ID(N'dbo.applications'))
+    CREATE INDEX IX_applications_org_candidate_updated
+        ON dbo.applications (org_id, candidate_id, updated_at DESC)
+        INCLUDE (current_stage_id, job_id);
+
+IF OBJECT_ID(N'dbo.candidates', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_candidates_org_created' AND object_id = OBJECT_ID(N'dbo.candidates'))
+    CREATE INDEX IX_candidates_org_created
+        ON dbo.candidates (org_id, created_at DESC);
+
+IF OBJECT_ID(N'dbo.candidates', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_candidates_org_email' AND object_id = OBJECT_ID(N'dbo.candidates'))
+    CREATE INDEX IX_candidates_org_email
+        ON dbo.candidates (org_id, email);
+
+IF OBJECT_ID(N'dbo.sourcing_leads', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_sourcing_leads_org_application' AND object_id = OBJECT_ID(N'dbo.sourcing_leads'))
+    CREATE INDEX IX_sourcing_leads_org_application
+        ON dbo.sourcing_leads (org_id, converted_application_id)
+        INCLUDE (job_id, fit_score, updated_at);
+
+IF OBJECT_ID(N'dbo.sourcing_leads', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_sourcing_leads_org_candidate' AND object_id = OBJECT_ID(N'dbo.sourcing_leads'))
+    CREATE INDEX IX_sourcing_leads_org_candidate
+        ON dbo.sourcing_leads (org_id, converted_candidate_id, job_id)
+        INCLUDE (fit_score, updated_at, converted_application_id);
+
+IF OBJECT_ID(N'dbo.sourcing_leads', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_sourcing_leads_org_email' AND object_id = OBJECT_ID(N'dbo.sourcing_leads'))
+    CREATE INDEX IX_sourcing_leads_org_email
+        ON dbo.sourcing_leads (org_id, email)
+        INCLUDE (job_id, fit_score, updated_at, converted_application_id, converted_candidate_id);
+
+IF OBJECT_ID(N'dbo.sourcing_leads', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_sourcing_leads_org_created' AND object_id = OBJECT_ID(N'dbo.sourcing_leads'))
+    CREATE INDEX IX_sourcing_leads_org_created
+        ON dbo.sourcing_leads (org_id, created_at DESC);
+";
+
+        using var connection = _connectionFactory.CreateConnection();
+        await connection.ExecuteAsync(sql);
     }
 }
 

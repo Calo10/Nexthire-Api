@@ -10,4 +10,12 @@ public interface INexaMessengerWhatsAppClient
         string body,
         TwilioOrgCredentials twilio,
         CancellationToken cancellationToken = default);
+
+    Task<string?> SendTemplateMessageAsync(
+        string tenantId,
+        string toPhone,
+        string contentSid,
+        IReadOnlyDictionary<string, string> contentVariables,
+        TwilioOrgCredentials twilio,
+        CancellationToken cancellationToken = default);
 }

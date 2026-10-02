@@ -426,7 +426,8 @@ await Task.WhenAll(
     EnsureWhatsAppTenantMappingsAsync(app.Services),
     EnsureNhUsersSchemaAsync(app.Services),
     EnsureNexaUserTokensSchemaAsync(app.Services),
-    EnsureCandidateTagsSchemaAsync(app.Services));
+    EnsureCandidateTagsSchemaAsync(app.Services),
+    EnsureListIndexesAsync(app.Services));
 
 app.Lifetime.ApplicationStarted.Register(() =>
 {
@@ -463,6 +464,7 @@ static async Task EnsureWhatsAppTenantMappingsAsync(IServiceProvider services)
     try
     {
         await repo.EnsureTenantMappingsSchemaAsync();
+        await repo.EnsureConversationReadSchemaAsync();
         await repo.SyncTenantMappingsFromConfigAsync(configuration);
         logger.LogInformation("whatsapp_tenant_mappings table is ready.");
     }
@@ -517,6 +519,22 @@ static async Task EnsureNexaUserTokensSchemaAsync(IServiceProvider services)
     catch (Exception ex)
     {
         logger.LogError(ex, "Failed to ensure nexa_user_tokens schema. Org invites may fail after API restart.");
+    }
+}
+
+static async Task EnsureListIndexesAsync(IServiceProvider services)
+{
+    using var scope = services.CreateScope();
+    var repo = scope.ServiceProvider.GetRequiredService<IApplicationsRepository>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        await repo.EnsureListIndexesAsync();
+        logger.LogInformation("List query indexes are ready.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to ensure list query indexes.");
     }
 }
 

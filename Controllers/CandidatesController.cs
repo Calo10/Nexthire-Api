@@ -38,6 +38,35 @@ public class CandidatesController : ControllerBase
         _logger = logger;
     }
 
+    private Guid[] ReadTagIds(Guid[]? bound)
+    {
+        var ids = new HashSet<Guid>();
+        if (bound != null)
+        {
+            foreach (var id in bound)
+            {
+                if (id != Guid.Empty)
+                    ids.Add(id);
+            }
+        }
+
+        if (Request.Query.TryGetValue("tagIds", out var values))
+        {
+            foreach (var value in values)
+            {
+                if (string.IsNullOrWhiteSpace(value))
+                    continue;
+                foreach (var part in value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    if (Guid.TryParse(part, out var id) && id != Guid.Empty)
+                        ids.Add(id);
+                }
+            }
+        }
+
+        return ids.Count == 0 ? Array.Empty<Guid>() : ids.ToArray();
+    }
+
     private void LogClaimsShapeForDebug()
     {
         // Safe: log claim TYPE NAMES only (no values, no token).
@@ -71,6 +100,7 @@ public class CandidatesController : ControllerBase
         [FromQuery] string? source,
         [FromQuery] DateTimeOffset? from,
         [FromQuery] DateTimeOffset? to,
+        [FromQuery] Guid[]? tagIds,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         [FromQuery] string? sort = "created_at",
@@ -88,7 +118,7 @@ public class CandidatesController : ControllerBase
             var orgId = ClaimUtils.RequireOrgId(User);
             _ = ClaimUtils.RequireUserId(User);
 
-            var result = await _candidateService.GetPagedAsync(orgId, search, source, from, to, page, pageSize, sort, dir);
+            var result = await _candidateService.GetPagedAsync(orgId, search, source, from, to, ReadTagIds(tagIds), page, pageSize, sort, dir);
             return Ok(result);
         }
         catch (UnauthorizedAccessException ex)
@@ -553,6 +583,56 @@ public class CandidatesController : ControllerBase
         {
             _logger.LogError(ex, "Error deleting candidate {CandidateId}", id);
             return StatusCode(500, new { message = "An error occurred while deleting the candidate" });
+        }
+    }
+
+    /// <summary>
+    /// Attach a resume file to an existing candidate. Same document pipeline as public job apply.
+    /// </summary>
+    [HttpPost("{id:guid}/resume")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(20_000_000)]
+    public async Task<ActionResult<CandidateDto>> UploadCandidateResume(Guid id, IFormFile? resume)
+    {
+        try
+        {
+            if (resume is null || resume.Length <= 0)
+                return BadRequest(new { message = "resume file is required" });
+
+            var orgId = ClaimUtils.RequireOrgId(User);
+            _ = ClaimUtils.RequireUserId(User);
+
+            var existing = await _candidateService.GetByIdAsync(orgId, id);
+            if (existing is null)
+                return NotFound(new { message = $"Candidate with ID {id} not found" });
+
+            var resumeDocumentId = await _resumeDocumentsUploader.UploadResumeAsync(orgId, resume, HttpContext.RequestAborted);
+            var updated = await _candidateRepo.SetResumeUrlAsync(orgId, id, resumeDocumentId);
+            if (!updated)
+                return NotFound(new { message = $"Candidate with ID {id} not found" });
+
+            var candidate = await _candidateService.GetByIdAsync(orgId, id);
+            return Ok(candidate);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            LogClaimsShapeForDebug();
+            return Unauthorized(new { message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("upload", StringComparison.OrdinalIgnoreCase)
+                                                   || ex.Message.Contains("Documents function", StringComparison.OrdinalIgnoreCase)
+                                                   || ex.Message.Contains("endpoint", StringComparison.OrdinalIgnoreCase))
+        {
+            return StatusCode(StatusCodes.Status502BadGateway, new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error uploading resume for candidate {CandidateId}", id);
+            return StatusCode(500, new { message = "An error occurred while uploading the resume" });
         }
     }
 
