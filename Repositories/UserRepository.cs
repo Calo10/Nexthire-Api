@@ -96,6 +96,25 @@ public class UserRepository : IUserRepository
         return list.FirstOrDefault();
     }
 
+    public async Task<OrgUserDto?> GetByNexaUserIdAsync(Guid orgId, Guid nexaUserId)
+    {
+        using var connection = _connectionFactory.CreateConnection();
+        var schema = await GetSchemaAsync(connection);
+        if (!schema.HasNexaUserId)
+            return null;
+
+        var where = schema.HasOrgId
+            ? "WHERE u.org_id = @orgId AND u.nexa_user_id = @nexaUserId"
+            : "WHERE u.nexa_user_id = @nexaUserId";
+        var sql = BuildSelectSql(schema, where);
+        var row = await connection.QueryFirstOrDefaultAsync<OrgUserRow>(sql, new { orgId, nexaUserId });
+        if (row is null)
+            return null;
+
+        var list = await AttachRolesAsync(connection, orgId, [row]);
+        return list.FirstOrDefault();
+    }
+
     public async Task<Guid> UpsertPendingByEmailAsync(Guid orgId, string email, string? firstName, string? lastName, string? phone)
     {
         var existing = await GetByEmailAsync(orgId, email);

@@ -27,6 +27,7 @@ public class CandidateRepository : ICandidateRepository
         string? source,
         DateTimeOffset? from,
         DateTimeOffset? to,
+        IReadOnlyCollection<Guid>? tagIds,
         int page,
         int pageSize,
         string sort,
@@ -37,6 +38,30 @@ public class CandidateRepository : ICandidateRepository
             ? string.Empty
             : new string(trimmedSearch.Where(char.IsDigit).ToArray());
         var trimmedSource = string.IsNullOrWhiteSpace(source) ? null : source.Trim();
+        var tagIdList = (tagIds ?? Array.Empty<Guid>()).Where(id => id != Guid.Empty).Distinct().ToArray();
+        var parameters = new DynamicParameters();
+        parameters.Add("orgId", orgId);
+        parameters.Add("search", trimmedSearch);
+        parameters.Add("phoneDigits", phoneDigits);
+        parameters.Add("source", trimmedSource);
+        parameters.Add("from", from);
+        parameters.Add("to", to);
+        var tagIn = new List<string>(tagIdList.Length);
+        for (var i = 0; i < tagIdList.Length; i++)
+        {
+            var name = $"tagId{i}";
+            parameters.Add(name, tagIdList[i]);
+            tagIn.Add("@" + name);
+        }
+        var tagFilter = tagIn.Count == 0
+            ? string.Empty
+            : $@"
+              AND EXISTS (
+                    SELECT 1
+                    FROM candidate_tag_assignments cta
+                    WHERE cta.candidate_id = c.id
+                      AND cta.tag_id IN ({string.Join(", ", tagIn)})
+                  )";
 
         var sortNormalized = string.IsNullOrWhiteSpace(sort) ? "created_at" : sort.Trim().ToLowerInvariant();
         if (sortNormalized != "created_at")
@@ -53,6 +78,8 @@ public class CandidateRepository : ICandidateRepository
         await EnsureTagsSchemaAsync();
 
         var offset = (page - 1) * pageSize;
+        parameters.Add("offset", offset);
+        parameters.Add("pageSize", pageSize);
 
         var sql = $@"
             SELECT COUNT(1)
@@ -72,7 +99,8 @@ public class CandidateRepository : ICandidateRepository
                          @phoneDigits <> ''
                          AND REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ISNULL(c.phone, ''), ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') LIKE '%' + @phoneDigits + '%'
                        )
-                  );
+                  )
+              {tagFilter};
 
             SELECT
                 c.id AS Id,
@@ -101,23 +129,14 @@ public class CandidateRepository : ICandidateRepository
                          AND REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ISNULL(c.phone, ''), ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') LIKE '%' + @phoneDigits + '%'
                        )
                   )
+              {tagFilter}
             ORDER BY c.created_at {orderDir}, c.id {orderDir}
             OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY;";
 
         using var connection = _connectionFactory.CreateConnection();
         int total;
         List<CandidateListItemDto> items;
-        using (var multi = await connection.QueryMultipleAsync(sql, new
-        {
-            orgId,
-            search = trimmedSearch,
-            phoneDigits,
-            source = trimmedSource,
-            from,
-            to,
-            offset,
-            pageSize
-        }))
+        using (var multi = await connection.QueryMultipleAsync(sql, parameters))
         {
             total = await multi.ReadSingleAsync<int>();
             items = (await multi.ReadAsync<CandidateListItemDto>()).ToList();
@@ -145,6 +164,7 @@ public class CandidateRepository : ICandidateRepository
                 c.phone AS Phone,
                 c.source AS Source,
                 c.resume_url AS ResumeUrl,
+                c.dynamic_answers_json AS DynamicAnswersJson,
                 c.created_at AS CreatedAt,
                 c.updated_at AS UpdatedAt
             FROM candidates c
@@ -323,6 +343,40 @@ public class CandidateRepository : ICandidateRepository
         return candidate;
     }
 
+    public async Task<bool> SetResumeUrlAsync(Guid orgId, Guid id, string resumeUrl)
+    {
+        const string sql = @"
+            UPDATE candidates
+            SET
+                resume_url = @ResumeUrl,
+                updated_at = TODATETIMEOFFSET(SYSUTCDATETIME(), '+00:00')
+            WHERE org_id = @OrgId AND id = @Id;";
+
+        using var connection = _connectionFactory.CreateConnection();
+        var affected = await connection.ExecuteAsync(sql, new { OrgId = orgId, Id = id, ResumeUrl = resumeUrl });
+        return affected > 0;
+    }
+
+    public async Task<bool> SetDynamicAnswersJsonAsync(Guid orgId, Guid id, string? dynamicAnswersJson)
+    {
+        await EnsureTagsSchemaAsync();
+        const string sql = @"
+            UPDATE candidates
+            SET
+                dynamic_answers_json = @DynamicAnswersJson,
+                updated_at = TODATETIMEOFFSET(SYSUTCDATETIME(), '+00:00')
+            WHERE org_id = @OrgId AND id = @Id;";
+
+        using var connection = _connectionFactory.CreateConnection();
+        var affected = await connection.ExecuteAsync(sql, new
+        {
+            OrgId = orgId,
+            Id = id,
+            DynamicAnswersJson = dynamicAnswersJson
+        });
+        return affected > 0;
+    }
+
     public async Task<bool> HasApplicationsAsync(Guid orgId, Guid candidateId)
     {
         const string sql = @"
@@ -398,6 +452,11 @@ BEGIN
     ALTER TABLE dbo.candidate_tag_assignments
         ADD CONSTRAINT FK_candidate_tag_assignments_candidate
         FOREIGN KEY (candidate_id) REFERENCES dbo.candidates (id) ON DELETE CASCADE;
+END
+
+IF COL_LENGTH('dbo.candidates', 'dynamic_answers_json') IS NULL
+BEGIN
+    ALTER TABLE dbo.candidates ADD dynamic_answers_json NVARCHAR(MAX) NULL;
 END";
 
         using var connection = _connectionFactory.CreateConnection();

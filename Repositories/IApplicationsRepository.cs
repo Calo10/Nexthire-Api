@@ -35,8 +35,10 @@ public interface IApplicationsRepository
 
     Task<ApplicationListItemDto?> SoftArchiveAsync(Guid orgId, Guid applicationId);
 
+    Task EnsureListIndexesAsync();
+
     // Kanban (minimal)
-    Task<IReadOnlyList<ApplicationCardDto>> GetKanbanCardsAsync(Guid orgId, Guid jobId);
+    Task<IReadOnlyList<ApplicationCardDto>> GetKanbanCardsAsync(Guid orgId, Guid? jobId);
     Task<ApplicationCardDto?> GetKanbanCardByIdAsync(Guid orgId, Guid applicationId);
     Task<ApplicationCardDto> CreateKanbanAsync(Guid orgId, Guid jobId, Guid candidateId, Guid currentStageId, string status, IDbTransaction? transaction = null);
     Task<ApplicationCardDto?> MoveKanbanAsync(Guid orgId, Guid applicationId, Guid toStageId, Guid movedByUserId);

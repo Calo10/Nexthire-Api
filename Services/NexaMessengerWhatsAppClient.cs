@@ -94,6 +94,89 @@ public class NexaMessengerWhatsAppClient : INexaMessengerWhatsAppClient
         return null;
     }
 
+    public Task<string?> SendTemplateMessageAsync(
+        string tenantId,
+        string toPhone,
+        string contentSid,
+        IReadOnlyDictionary<string, string> contentVariables,
+        TwilioOrgCredentials twilio,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(tenantId))
+            throw new ArgumentException("tenantId is required.", nameof(tenantId));
+
+        var from = WhatsAppPhoneNormalizer.ToWhatsappPrefixed(twilio.DefaultFromWhatsAppNumber);
+        if (string.IsNullOrWhiteSpace(from))
+            throw new InvalidOperationException("Twilio DefaultFromWhatsAppNumber is not configured for this organization.");
+
+        var payload = new
+        {
+            tenantId = tenantId.Trim(),
+            channel = "whatsapp",
+            to = toPhone,
+            from,
+            contentSid,
+            contentVariables,
+            twilio = new
+            {
+                accountSid = twilio.AccountSid,
+                authToken = twilio.AuthToken,
+                from
+            }
+        };
+
+        return PostAsync(tenantId, toPhone, payload, contentSid, cancellationToken);
+    }
+
+    private async Task<string?> PostAsync(
+        string tenantId,
+        string toPhone,
+        object payload,
+        string? contentSid,
+        CancellationToken cancellationToken)
+    {
+        var baseUrl = _configuration["MessengerFunction:WhatsAppUrl"]
+            ?? _configuration["MessengerFunction:Url"];
+        var functionCode = _configuration["MessengerFunction:Code"];
+
+        if (string.IsNullOrWhiteSpace(baseUrl) || string.IsNullOrWhiteSpace(functionCode))
+            throw new InvalidOperationException("MessengerFunction WhatsApp configuration is missing.");
+
+        var requestUrl = $"{baseUrl}?code={Uri.EscapeDataString(functionCode)}";
+        _logger.LogInformation(
+            "Sending WhatsApp via Messenger Function. Url: {Url}, TenantId: {TenantId}, To: {To}, ContentSid: {ContentSid}",
+            baseUrl,
+            tenantId,
+            toPhone,
+            contentSid);
+
+        var response = await _httpClient.PostAsJsonAsync(requestUrl, payload, cancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogError(
+                "Messenger WhatsApp send failed. Url: {Url}, TenantId: {TenantId}, To: {To}, ContentSid: {ContentSid}, Status: {Status}, Response: {Response}",
+                baseUrl, tenantId, toPhone, contentSid, (int)response.StatusCode, Truncate(responseBody, 500));
+            throw new InvalidOperationException($"WhatsApp send failed with status {(int)response.StatusCode}");
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(responseBody);
+            if (doc.RootElement.TryGetProperty("providerMessageId", out var idElement) &&
+                idElement.ValueKind == JsonValueKind.String)
+            {
+                return idElement.GetString();
+            }
+        }
+        catch
+        {
+            // Ignore parse issues and return null provider ID.
+        }
+
+        return null;
+    }
+
     private static string Truncate(string value, int maxLength)
     {
         if (string.IsNullOrEmpty(value) || value.Length <= maxLength)

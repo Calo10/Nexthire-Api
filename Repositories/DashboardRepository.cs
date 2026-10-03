@@ -148,13 +148,19 @@ public class DashboardRepository : IDashboardRepository
                 ps.name AS CurrentStageName,
                 c.updated_at AS UpdatedAt
             FROM candidates c
-            OUTER APPLY (
-                SELECT TOP 1 a2.current_stage_id
-                FROM applications a2
-                WHERE a2.org_id = @orgId AND a2.candidate_id = c.id
-                ORDER BY a2.updated_at DESC
-            ) lastApp
-            LEFT JOIN pipeline_stages ps ON lastApp.current_stage_id = ps.id
+            LEFT JOIN (
+                SELECT ranked.candidate_id, ranked.current_stage_id
+                FROM (
+                    SELECT
+                        a2.candidate_id,
+                        a2.current_stage_id,
+                        ROW_NUMBER() OVER (PARTITION BY a2.candidate_id ORDER BY a2.updated_at DESC) AS rn
+                    FROM applications a2
+                    WHERE a2.org_id = @orgId
+                ) ranked
+                WHERE ranked.rn = 1
+            ) lastApp ON lastApp.candidate_id = c.id
+            LEFT JOIN pipeline_stages ps ON lastApp.current_stage_id = ps.id AND ps.org_id = @orgId
             WHERE c.org_id = @orgId
             ORDER BY c.updated_at DESC";
 

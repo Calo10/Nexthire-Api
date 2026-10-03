@@ -228,6 +228,13 @@ public class WhatsAppInboundRepository : IWhatsAppInboundRepository
                 },
                 transaction);
 
+            await TryLinkCandidateByPhoneAsync(
+                connection,
+                transaction,
+                conversationId.Value,
+                inbound.TenantId,
+                canonicalPhone);
+
             transaction.Commit();
             return new WhatsAppInboundSaveResult
             {
@@ -289,6 +296,46 @@ END";
 
         using var connection = _connectionFactory.CreateConnection();
         await connection.ExecuteAsync(new CommandDefinition(sql, cancellationToken: cancellationToken));
+    }
+
+    public async Task EnsureConversationReadSchemaAsync(CancellationToken cancellationToken = default)
+    {
+        const string sql = @"
+IF COL_LENGTH('dbo.whatsapp_conversations', 'recruiter_last_read_at_utc') IS NULL
+BEGIN
+    ALTER TABLE dbo.whatsapp_conversations ADD recruiter_last_read_at_utc DATETIMEOFFSET(7) NULL;
+    EXEC('UPDATE dbo.whatsapp_conversations SET recruiter_last_read_at_utc = SYSDATETIMEOFFSET() WHERE recruiter_last_read_at_utc IS NULL');
+END";
+
+        using var connection = _connectionFactory.CreateConnection();
+        await connection.ExecuteAsync(new CommandDefinition(sql, cancellationToken: cancellationToken));
+    }
+
+    public async Task<bool> MarkConversationReadAsync(Guid conversationId, string tenantId, CancellationToken cancellationToken = default)
+    {
+        const string sql = @"
+            UPDATE c
+            SET recruiter_last_read_at_utc = SYSDATETIMEOFFSET()
+            FROM whatsapp_conversations c
+            WHERE c.id = @conversationId
+              AND (
+                    c.tenant_id = @tenantId
+                 OR c.tenant_id = CONVERT(nvarchar(100), TRY_CONVERT(uniqueidentifier, @tenantId))
+                 OR EXISTS (
+                        SELECT 1
+                        FROM whatsapp_tenant_mappings map
+                        WHERE map.messenger_tenant = c.tenant_id
+                          AND (
+                                map.org_id = TRY_CONVERT(uniqueidentifier, @tenantId)
+                             OR CONVERT(nvarchar(100), map.org_id) = @tenantId
+                          )
+                    )
+                  );";
+
+        using var connection = _connectionFactory.CreateConnection();
+        var affected = await connection.ExecuteAsync(
+            new CommandDefinition(sql, new { conversationId, tenantId }, cancellationToken: cancellationToken));
+        return affected > 0;
     }
 
     public async Task SyncTenantMappingsFromConfigAsync(IConfiguration configuration, CancellationToken cancellationToken = default)
@@ -495,6 +542,20 @@ WHEN NOT MATCHED THEN
         await connection.ExecuteAsync(sql, new { conversationId, NowUtc = DateTimeOffset.UtcNow });
     }
 
+    public async Task<bool> IsConversationBotEnabledAsync(Guid conversationId, CancellationToken cancellationToken)
+    {
+        const string sql = @"
+            SELECT CASE WHEN bot_enabled = 0 THEN 0 ELSE 1 END
+            FROM whatsapp_conversations
+            WHERE id = @conversationId;";
+
+        cancellationToken.ThrowIfCancellationRequested();
+        using var connection = _connectionFactory.CreateConnection();
+        var enabled = await connection.ExecuteScalarAsync<int?>(
+            new CommandDefinition(sql, new { conversationId }, cancellationToken: cancellationToken));
+        return enabled != 0;
+    }
+
     public async Task<IReadOnlyList<WhatsAppConversationListItemDto>> GetConversationsAsync(string tenantId, string? status)
     {
         const string sql = @"
@@ -508,9 +569,37 @@ WHEN NOT MATCHED THEN
                 c.assigned_recruiter_id AS AssignedRecruiterId,
                 c.status AS Status,
                 ISNULL(c.bot_enabled, 0) AS BotEnabled,
-                c.last_message_at_utc AS LastMessageAtUtc
+                c.last_message_at_utc AS LastMessageAtUtc,
+                (
+                    SELECT TOP 1 m.body
+                    FROM whatsapp_messages m
+                    WHERE m.conversation_id = c.id
+                    ORDER BY m.created_at_utc DESC
+                ) AS LastMessageBody,
+                (
+                    SELECT COUNT(1)
+                    FROM whatsapp_messages um
+                    WHERE um.conversation_id = c.id
+                      AND LOWER(LTRIM(RTRIM(um.direction))) = 'inbound'
+                      AND (
+                            c.recruiter_last_read_at_utc IS NULL
+                         OR um.created_at_utc > c.recruiter_last_read_at_utc
+                      )
+                ) AS UnreadCount
             FROM whatsapp_conversations c
-            WHERE c.tenant_id = @tenantId
+            WHERE (
+                    c.tenant_id = @tenantId
+                 OR c.tenant_id = CONVERT(nvarchar(100), TRY_CONVERT(uniqueidentifier, @tenantId))
+                 OR EXISTS (
+                        SELECT 1
+                        FROM whatsapp_tenant_mappings map
+                        WHERE map.messenger_tenant = c.tenant_id
+                          AND (
+                                map.org_id = TRY_CONVERT(uniqueidentifier, @tenantId)
+                             OR CONVERT(nvarchar(100), map.org_id) = @tenantId
+                          )
+                    )
+                  )
               AND (@status IS NULL OR c.status = @status)
             ORDER BY c.last_message_at_utc DESC, c.updated_at_utc DESC;";
 
@@ -536,14 +625,141 @@ WHEN NOT MATCHED THEN
                 c.assigned_recruiter_id AS AssignedRecruiterId,
                 c.status AS Status,
                 ISNULL(c.bot_enabled, 0) AS BotEnabled,
-                c.last_message_at_utc AS LastMessageAtUtc
+                c.last_message_at_utc AS LastMessageAtUtc,
+                (
+                    SELECT COUNT(1)
+                    FROM whatsapp_messages um
+                    WHERE um.conversation_id = c.id
+                      AND LOWER(LTRIM(RTRIM(um.direction))) = 'inbound'
+                      AND (
+                            c.recruiter_last_read_at_utc IS NULL
+                         OR um.created_at_utc > c.recruiter_last_read_at_utc
+                      )
+                ) AS UnreadCount
             FROM whatsapp_conversations c
             WHERE c.tenant_id = @tenantId
               AND c.candidate_id = @candidateId
             ORDER BY c.last_message_at_utc DESC, c.updated_at_utc DESC;";
 
         using var connection = _connectionFactory.CreateConnection();
-        return await connection.QueryFirstOrDefaultAsync<WhatsAppConversationListItemDto>(sql, new { tenantId, candidateId });
+
+        const string candidateSql = @"
+            SELECT TOP 1
+                org_id AS OrgId,
+                phone AS Phone
+            FROM candidates
+            WHERE id = @candidateId;";
+
+        var candidate = await connection.QueryFirstOrDefaultAsync<CandidatePhoneLookup>(candidateSql, new { candidateId });
+        if (candidate == null || candidate.OrgId == Guid.Empty)
+            return await connection.QueryFirstOrDefaultAsync<WhatsAppConversationListItemDto>(sql, new { tenantId, candidateId });
+
+        if (Guid.TryParse(tenantId, out var requestedOrgId) && requestedOrgId != candidate.OrgId)
+            return null;
+
+        var digits = new string((candidate.Phone ?? string.Empty).Where(char.IsDigit).ToArray());
+
+        const string matchSql = @"
+            SELECT TOP 1
+                c.id AS Id,
+                c.phone_number AS PhoneNumber,
+                c.profile_name AS ProfileName,
+                c.candidate_id AS CandidateId,
+                c.job_id AS JobId,
+                c.application_id AS ApplicationId,
+                c.assigned_recruiter_id AS AssignedRecruiterId,
+                c.status AS Status,
+                ISNULL(c.bot_enabled, 0) AS BotEnabled,
+                c.last_message_at_utc AS LastMessageAtUtc,
+                (
+                    SELECT COUNT(1)
+                    FROM whatsapp_messages um
+                    WHERE um.conversation_id = c.id
+                      AND LOWER(LTRIM(RTRIM(um.direction))) = 'inbound'
+                      AND (
+                            c.recruiter_last_read_at_utc IS NULL
+                         OR um.created_at_utc > c.recruiter_last_read_at_utc
+                      )
+                ) AS UnreadCount
+            FROM whatsapp_conversations c
+            WHERE (
+                    c.tenant_id = @tenantId
+                 OR c.tenant_id = CONVERT(nvarchar(100), @orgId)
+                 OR EXISTS (
+                        SELECT 1
+                        FROM whatsapp_tenant_mappings m
+                        WHERE m.org_id = @orgId
+                          AND m.messenger_tenant = c.tenant_id
+                    )
+                  )
+              AND (
+                    c.candidate_id = @candidateId
+                 OR (
+                        @digits <> ''
+                    AND c.candidate_id IS NULL
+                    AND REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(ISNULL(c.phone_number, '')), 'whatsapp:', ''), ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') = @digits
+                    )
+                  )
+            ORDER BY
+                (SELECT COUNT(1) FROM whatsapp_messages msg WHERE msg.conversation_id = c.id) DESC,
+                c.last_message_at_utc DESC;";
+
+        var match = await connection.QueryFirstOrDefaultAsync<WhatsAppConversationListItemDto>(
+            matchSql,
+            new { tenantId, candidateId, orgId = candidate.OrgId, digits });
+        if (match == null)
+            return null;
+
+        if (match.CandidateId == null)
+        {
+            const string linkSql = @"
+                UPDATE whatsapp_conversations
+                SET candidate_id = @candidateId, updated_at_utc = SYSDATETIMEOFFSET()
+                WHERE id = @id AND candidate_id IS NULL;";
+            await connection.ExecuteAsync(linkSql, new { candidateId, id = match.Id });
+            match.CandidateId = candidateId;
+        }
+
+        return match;
+    }
+
+    private sealed class CandidatePhoneLookup
+    {
+        public Guid OrgId { get; set; }
+        public string? Phone { get; set; }
+    }
+
+    private static async Task TryLinkCandidateByPhoneAsync(
+        IDbConnection connection,
+        IDbTransaction transaction,
+        Guid conversationId,
+        string tenantId,
+        string canonicalPhone)
+    {
+        var digits = new string((canonicalPhone ?? string.Empty).Where(char.IsDigit).ToArray());
+        if (digits.Length < 8)
+            return;
+
+        const string sql = @"
+            UPDATE c
+            SET candidate_id = picked.id
+            FROM whatsapp_conversations c
+            CROSS APPLY (
+                SELECT TOP 1 cand.id
+                FROM candidates cand
+                WHERE cand.org_id = COALESCE(
+                        TRY_CONVERT(uniqueidentifier, @TenantId),
+                        (SELECT TOP 1 m.org_id FROM whatsapp_tenant_mappings m WHERE m.messenger_tenant = @TenantId)
+                      )
+                  AND REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ISNULL(cand.phone, ''), ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') = @Digits
+            ) picked
+            WHERE c.id = @ConversationId
+              AND c.candidate_id IS NULL;";
+
+        await connection.ExecuteAsync(
+            sql,
+            new { ConversationId = conversationId, TenantId = tenantId, Digits = digits },
+            transaction);
     }
 
     public async Task<IReadOnlyList<WhatsAppConversationMessageDto>> GetConversationMessagesAsync(Guid conversationId, string tenantId)
@@ -562,7 +778,19 @@ WHEN NOT MATCHED THEN
             INNER JOIN whatsapp_conversations c
                 ON c.id = m.conversation_id
             WHERE m.conversation_id = @conversationId
-              AND c.tenant_id = @tenantId
+              AND (
+                    c.tenant_id = @tenantId
+                 OR c.tenant_id = CONVERT(nvarchar(100), TRY_CONVERT(uniqueidentifier, @tenantId))
+                 OR EXISTS (
+                        SELECT 1
+                        FROM whatsapp_tenant_mappings map
+                        WHERE map.messenger_tenant = c.tenant_id
+                          AND (
+                                map.org_id = TRY_CONVERT(uniqueidentifier, @tenantId)
+                             OR CONVERT(nvarchar(100), map.org_id) = @tenantId
+                          )
+                    )
+                  )
             ORDER BY m.created_at_utc ASC;";
 
         using var connection = _connectionFactory.CreateConnection();
@@ -580,7 +808,19 @@ WHEN NOT MATCHED THEN
                 NULL AS BusinessPhoneNumber
             FROM whatsapp_conversations c
             WHERE c.id = @conversationId
-              AND c.tenant_id = @tenantId;";
+              AND (
+                    c.tenant_id = @tenantId
+                 OR c.tenant_id = CONVERT(nvarchar(100), TRY_CONVERT(uniqueidentifier, @tenantId))
+                 OR EXISTS (
+                        SELECT 1
+                        FROM whatsapp_tenant_mappings map
+                        WHERE map.messenger_tenant = c.tenant_id
+                          AND (
+                                map.org_id = TRY_CONVERT(uniqueidentifier, @tenantId)
+                             OR CONVERT(nvarchar(100), map.org_id) = @tenantId
+                          )
+                    )
+                  );";
 
         using var connection = _connectionFactory.CreateConnection();
         return await connection.QueryFirstOrDefaultAsync<WhatsAppConversationSendContextDto>(sql, new { conversationId, tenantId });
@@ -746,7 +986,8 @@ WHEN NOT MATCHED THEN
             UPDATE whatsapp_conversations
             SET
                 last_message_at_utc = @NowUtc,
-                updated_at_utc = @NowUtc
+                updated_at_utc = @NowUtc,
+                bot_enabled = 0
             WHERE id = @ConversationId
               AND tenant_id = @TenantId;";
 

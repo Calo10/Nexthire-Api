@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Data.SqlClient;
 using nexthire_api.DTOs;
+using nexthire_api.Helpers;
 using nexthire_api.Models.Notes;
 using nexthire_api.Repositories;
 using nexthire_api.Security;
@@ -20,6 +21,10 @@ public class ApplicationsController : ControllerBase
     private readonly IPipelineRepository _pipelineRepo;
     private readonly ITasksRepository _tasksRepo;
     private readonly INotesRepository _notesRepo;
+    private readonly ICandidateService _candidateService;
+    private readonly ICandidateRepository _candidateRepo;
+    private readonly IJobBotQuestionRepository _jobBotQuestions;
+    private readonly IResumeDocumentsUploader _resumeDocumentsUploader;
     private readonly ILogger<ApplicationsController> _logger;
 
     public ApplicationsController(
@@ -28,6 +33,10 @@ public class ApplicationsController : ControllerBase
         IPipelineRepository pipelineRepo,
         ITasksRepository tasksRepo,
         INotesRepository notesRepo,
+        ICandidateService candidateService,
+        ICandidateRepository candidateRepo,
+        IJobBotQuestionRepository jobBotQuestions,
+        IResumeDocumentsUploader resumeDocumentsUploader,
         ILogger<ApplicationsController> logger)
     {
         _service = service;
@@ -35,6 +44,10 @@ public class ApplicationsController : ControllerBase
         _pipelineRepo = pipelineRepo;
         _tasksRepo = tasksRepo;
         _notesRepo = notesRepo;
+        _candidateService = candidateService;
+        _candidateRepo = candidateRepo;
+        _jobBotQuestions = jobBotQuestions;
+        _resumeDocumentsUploader = resumeDocumentsUploader;
         _logger = logger;
     }
 
@@ -320,23 +333,145 @@ public class ApplicationsController : ControllerBase
     }
 
     /// <summary>
+    /// Create a candidate from the same multipart fields as public job apply, store that job's answers, and open a pipeline application.
+    /// </summary>
+    [HttpPost("from-apply-form")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(20_000_000)]
+    [ProducesResponseType(typeof(ApplicationCardDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public async Task<ActionResult<object>> CreateFromApplyForm(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var orgId = ClaimUtils.RequireOrgId(User);
+            var userId = ClaimUtils.RequireUserId(User);
+            var nexaUserId = ClaimUtils.RequireNexaUserId(User);
+            var email = ClaimUtils.GetEmail(User);
+            var displayName = ClaimUtils.GetDisplayName(User);
+
+            var form = await Request.ReadFormAsync(cancellationToken);
+            var (data, parseError) = PublicJobApplyFormParser.Parse(form, form.Files);
+            if (data == null)
+                return BadRequest(new { message = parseError ?? "Invalid apply form." });
+
+            var jobIdRaw = form["jobId"].FirstOrDefault() ?? form["JobId"].FirstOrDefault();
+            if (!Guid.TryParse(jobIdRaw, out var jobId) || jobId == Guid.Empty)
+                return BadRequest(new { message = "jobId is required." });
+
+            var emailLower = data.Email.Trim().ToLowerInvariant();
+            if (await _candidateRepo.ExistsByEmailAsync(orgId, emailLower))
+            {
+                return Conflict(new
+                {
+                    message = "A candidate with this email already exists. Select them from the list."
+                });
+            }
+
+            var questions = await _jobBotQuestions.ListByJobAsync(orgId, jobId, includeInactive: false);
+            var validationError = PublicJobApplyFormParser.ValidateRequiredQuestionAnswers(
+                questions,
+                data.DynamicAnswersJson,
+                data.Resume,
+                data.AnswerFilesByQuestionId);
+            if (validationError != null)
+                return BadRequest(new { message = validationError });
+
+            var (answersJson, resumeDocumentId) = await PublicJobApplyFormParser.ProcessApplyFilesAsync(
+                orgId,
+                data.DynamicAnswersJson,
+                questions,
+                data.AnswerFilesByQuestionId,
+                data.Resume,
+                _resumeDocumentsUploader,
+                cancellationToken);
+
+            var (candidate, emailConflict) = await _candidateService.CreateAsync(
+                orgId,
+                userId,
+                new CreateCandidateRequestDto
+                {
+                    FirstName = data.FirstName,
+                    LastName = data.LastName,
+                    Email = emailLower,
+                    Phone = data.Phone,
+                    Source = string.IsNullOrWhiteSpace(data.Source) ? "panel_apply" : data.Source,
+                    ResumeUrl = resumeDocumentId
+                });
+            if (emailConflict || candidate == null)
+            {
+                return Conflict(new
+                {
+                    message = "A candidate with this email already exists. Select them from the list."
+                });
+            }
+
+            if (!string.IsNullOrWhiteSpace(answersJson))
+                await _candidateRepo.SetDynamicAnswersJsonAsync(orgId, candidate.Id, answersJson);
+
+            var createdCard = await _service.CreateKanbanApplicationAsync(
+                orgId,
+                nexaUserId,
+                email,
+                displayName,
+                jobId,
+                candidate.Id,
+                currentStageId: null,
+                status: null);
+
+            return CreatedAtAction(nameof(GetApplicationKanbanDetail), new { id = createdCard.Id }, createdCard);
+        }
+        catch (SqlException ex) when (ex.Number == 2601 || ex.Number == 2627)
+        {
+            return Conflict(new { message = "This candidate already has an application for the selected job." });
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("upload", StringComparison.OrdinalIgnoreCase)
+                                                   || ex.Message.Contains("Documents function", StringComparison.OrdinalIgnoreCase)
+                                                   || ex.Message.Contains("endpoint", StringComparison.OrdinalIgnoreCase))
+        {
+            return StatusCode(StatusCodes.Status502BadGateway, new { message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return StatusCode(500, new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating application from apply form");
+            return StatusCode(500, new { message = "An error occurred while creating the application" });
+        }
+    }
+
+    /// <summary>
     /// Kanban board for a job: { stages: [...], columns: { [stageId]: ApplicationCardDto[] } }
     /// </summary>
     [HttpGet("kanban")]
     [ProducesResponseType(typeof(KanbanBoardDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<ActionResult<KanbanBoardDto>> GetKanban([FromQuery] Guid jobId)
+    public async Task<ActionResult<KanbanBoardDto>> GetKanban([FromQuery] Guid? jobId)
     {
         try
         {
             var orgId = ClaimUtils.RequireOrgId(User);
 
-            if (!await _pipelineRepo.JobExistsInOrgAsync(orgId, jobId))
+            Guid? filterJobId = jobId is Guid id && id != Guid.Empty ? id : null;
+            if (filterJobId is Guid requiredJobId && !await _pipelineRepo.JobExistsInOrgAsync(orgId, requiredJobId))
                 return BadRequest(new { message = "jobId not found in this organization" });
 
             var stages = await _pipelineRepo.EnsureDefaultStagesAsync(orgId);
-            var cards = await _repo.GetKanbanCardsAsync(orgId, jobId);
+            var cards = await _repo.GetKanbanCardsAsync(orgId, filterJobId);
 
             var columns = new Dictionary<Guid, List<ApplicationCardDto>>();
             foreach (var stage in stages)

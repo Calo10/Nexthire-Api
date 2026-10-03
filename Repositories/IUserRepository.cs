@@ -8,6 +8,7 @@ public interface IUserRepository
     Task<IReadOnlyList<OrgUserDto>> ListByOrgAsync(Guid orgId);
     Task<OrgUserDto?> GetByIdAsync(Guid orgId, Guid userId);
     Task<OrgUserDto?> GetByEmailAsync(Guid orgId, string email);
+    Task<OrgUserDto?> GetByNexaUserIdAsync(Guid orgId, Guid nexaUserId);
     Task<Guid> UpsertPendingByEmailAsync(Guid orgId, string email, string? firstName, string? lastName, string? phone);
     Task<Guid> UpsertFromNexaMemberAsync(Guid orgId, Guid nexaUserId, string email, string? fullName);
     Task<OrgUserDto?> UpdateProfileAsync(Guid orgId, Guid userId, UpdateOrgUserRequestDto dto);

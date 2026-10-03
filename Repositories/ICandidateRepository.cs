@@ -11,6 +11,7 @@ public interface ICandidateRepository
         string? source,
         DateTimeOffset? from,
         DateTimeOffset? to,
+        IReadOnlyCollection<Guid>? tagIds,
         int page,
         int pageSize,
         string sort,
@@ -30,6 +31,10 @@ public interface ICandidateRepository
     Task<CandidateDto> InsertAsync(Guid orgId, CreateCandidateRequestDto dto, string emailLower, IDbTransaction? transaction = null);
 
     Task<CandidateDto?> UpdateAsync(Guid orgId, Guid id, UpdateCandidateRequestDto dto, string emailLower);
+
+    Task<bool> SetResumeUrlAsync(Guid orgId, Guid id, string resumeUrl);
+
+    Task<bool> SetDynamicAnswersJsonAsync(Guid orgId, Guid id, string? dynamicAnswersJson);
 
     Task<bool> HasApplicationsAsync(Guid orgId, Guid candidateId);
 
