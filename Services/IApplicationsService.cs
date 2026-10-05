@@ -36,6 +36,7 @@ public interface IApplicationsService
 
     Task<ApplicationDetailDto?> MoveStageAsync(Guid orgId, Guid currentNhUserId, Guid applicationId, MoveStageRequestDto request);
 
-    Task<ApplicationListItemDto?> DeleteAsync(Guid orgId, Guid applicationId);
+    /// <summary>Deletes the application only. The candidate row is kept.</summary>
+    Task<bool> DeleteAsync(Guid orgId, Guid applicationId);
 }
 

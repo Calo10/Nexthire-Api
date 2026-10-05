@@ -701,7 +701,7 @@ public class ApplicationsController : ControllerBase
     }
 
     /// <summary>
-    /// Archive application (soft delete via status='archived').
+    /// Delete the application. The candidate is not deleted.
     /// </summary>
     [HttpDelete("{id}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -713,8 +713,8 @@ public class ApplicationsController : ControllerBase
         {
             var orgId = ClaimUtils.RequireOrgId(User);
 
-            var archived = await _service.DeleteAsync(orgId, id);
-            if (archived == null)
+            var deleted = await _service.DeleteAsync(orgId, id);
+            if (!deleted)
                 return NotFound(new { message = $"Application with ID {id} not found" });
 
             return NoContent();

@@ -433,6 +433,54 @@ public class ApplicationsRepository : IApplicationsRepository
         return await connection.QueryFirstOrDefaultAsync<ApplicationListItemDto>(sql, new { orgId, applicationId });
     }
 
+    public async Task<bool> DeletePermanentlyAsync(Guid orgId, Guid applicationId)
+    {
+        const string sql = @"
+SET XACT_ABORT ON;
+BEGIN TRAN;
+
+IF OBJECT_ID(N'dbo.stage_history', N'U') IS NOT NULL
+    DELETE sh
+    FROM dbo.stage_history sh
+    INNER JOIN dbo.applications a ON a.id = sh.application_id
+    WHERE a.org_id = @orgId AND a.id = @applicationId;
+
+IF OBJECT_ID(N'dbo.notes', N'U') IS NOT NULL
+    DELETE n
+    FROM dbo.notes n
+    INNER JOIN dbo.applications a ON a.id = n.application_id
+    WHERE a.org_id = @orgId AND a.id = @applicationId;
+
+IF OBJECT_ID(N'dbo.tasks', N'U') IS NOT NULL
+    DELETE t
+    FROM dbo.tasks t
+    INNER JOIN dbo.applications a ON a.id = t.application_id
+    WHERE a.org_id = @orgId AND a.id = @applicationId;
+
+IF COL_LENGTH('dbo.sourcing_leads', 'converted_application_id') IS NOT NULL
+    UPDATE dbo.sourcing_leads
+    SET converted_application_id = NULL
+    WHERE org_id = @orgId AND converted_application_id = @applicationId;
+
+IF COL_LENGTH('dbo.whatsapp_conversations', 'application_id') IS NOT NULL
+    UPDATE wc
+    SET application_id = NULL
+    FROM dbo.whatsapp_conversations wc
+    INNER JOIN dbo.applications a ON a.id = wc.application_id
+    WHERE a.org_id = @orgId AND a.id = @applicationId;
+
+DELETE FROM dbo.applications
+WHERE org_id = @orgId AND id = @applicationId;
+
+SELECT @@ROWCOUNT;
+
+COMMIT;";
+
+        using var connection = _connectionFactory.CreateConnection();
+        var deleted = await connection.ExecuteScalarAsync<int>(sql, new { orgId, applicationId });
+        return deleted > 0;
+    }
+
     public async Task<IReadOnlyList<ApplicationCardDto>> GetKanbanCardsAsync(Guid orgId, Guid? jobId)
     {
         var sql = @"
