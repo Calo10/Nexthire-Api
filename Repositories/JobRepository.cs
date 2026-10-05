@@ -20,10 +20,7 @@ public class JobRepository : IJobRepository
                 j.language AS Language,
                 j.created_at AS CreatedAt,
                 j.updated_at AS UpdatedAt,
-                CASE
-                    WHEN j.ad_design_base64 IS NOT NULL AND LTRIM(RTRIM(j.ad_design_base64)) <> '' THEN CAST(1 AS bit)
-                    ELSE CAST(0 AS bit)
-                END AS HasAdDesign";
+                j.has_ad_design AS HasAdDesign";
 
     public JobRepository(IDbConnectionFactory connectionFactory, ILogger<JobRepository> logger)
     {
@@ -50,6 +47,12 @@ END
 IF COL_LENGTH('dbo.jobs', 'ad_design_text') IS NULL
 BEGIN
     ALTER TABLE dbo.jobs ADD ad_design_text NVARCHAR(MAX) NULL;
+END
+
+IF COL_LENGTH('dbo.jobs', 'has_ad_design') IS NULL
+BEGIN
+    EXEC(N'ALTER TABLE dbo.jobs ADD has_ad_design BIT NOT NULL CONSTRAINT DF_jobs_has_ad_design DEFAULT (0);');
+    EXEC(N'UPDATE dbo.jobs SET has_ad_design = 1 WHERE DATALENGTH(ad_design_base64) > 0;');
 END";
 
         try
@@ -69,14 +72,16 @@ END";
         await EnsureAdDesignSchemaAsync();
 
         var sql = $@"
-            SELECT 
+            SELECT
                 {JobSelectColumns},
-                (
-                    SELECT COUNT(DISTINCT a.candidate_id)
-                    FROM applications a
-                    WHERE a.org_id = @orgId AND a.job_id = j.id
-                ) AS ApplicantsCount
+                ISNULL(appCounts.ApplicantsCount, 0) AS ApplicantsCount
             FROM jobs j
+            LEFT JOIN (
+                SELECT a.job_id, COUNT(DISTINCT a.candidate_id) AS ApplicantsCount
+                FROM applications a
+                WHERE a.org_id = @orgId
+                GROUP BY a.job_id
+            ) appCounts ON appCounts.job_id = j.id
             WHERE j.org_id = @orgId
             ORDER BY j.created_at DESC;";
 
@@ -108,14 +113,16 @@ END";
         await EnsureAdDesignSchemaAsync();
 
         var sql = $@"
-            SELECT 
+            SELECT
                 {JobSelectColumns},
-                (
-                    SELECT COUNT(DISTINCT a.candidate_id)
-                    FROM applications a
-                    WHERE a.org_id = @orgId AND a.job_id = j.id
-                ) AS ApplicantsCount
+                ISNULL(appCounts.ApplicantsCount, 0) AS ApplicantsCount
             FROM jobs j
+            LEFT JOIN (
+                SELECT a.job_id, COUNT(DISTINCT a.candidate_id) AS ApplicantsCount
+                FROM applications a
+                WHERE a.org_id = @orgId
+                GROUP BY a.job_id
+            ) appCounts ON appCounts.job_id = j.id
             WHERE j.org_id = @orgId AND LOWER(j.status) = 'open'
             ORDER BY j.created_at DESC;";
 
@@ -237,8 +244,7 @@ SELECT
 FROM dbo.jobs
 WHERE org_id = @orgId
   AND id = @jobId
-  AND ad_design_base64 IS NOT NULL
-  AND LTRIM(RTRIM(ad_design_base64)) <> '';";
+  AND has_ad_design = 1;";
 
         using var connection = _connectionFactory.CreateConnection();
         return await connection.QueryFirstOrDefaultAsync<JobAdDesignDto>(
@@ -259,6 +265,7 @@ SET
     ad_design_base64 = @ImageBase64,
     ad_design_content_type = @ImageContentType,
     ad_design_text = @AdText,
+    has_ad_design = 1,
     updated_at = SYSDATETIMEOFFSET()
 WHERE org_id = @orgId AND id = @jobId;
 
@@ -300,6 +307,7 @@ SET
     ad_design_base64 = NULL,
     ad_design_content_type = NULL,
     ad_design_text = NULL,
+    has_ad_design = 0,
     updated_at = SYSDATETIMEOFFSET()
 WHERE org_id = @orgId AND id = @jobId;";
 
