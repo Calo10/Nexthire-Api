@@ -35,6 +35,9 @@ public interface IApplicationsRepository
 
     Task<ApplicationListItemDto?> SoftArchiveAsync(Guid orgId, Guid applicationId);
 
+    /// <summary>Removes the application and its pipeline records. Does not delete the candidate.</summary>
+    Task<bool> DeletePermanentlyAsync(Guid orgId, Guid applicationId);
+
     Task EnsureListIndexesAsync();
 
     // Kanban (minimal)

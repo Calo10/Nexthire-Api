@@ -141,10 +141,9 @@ public class ApplicationsService : IApplicationsService
         return await GetDetailAsync(orgId, applicationId);
     }
 
-    public Task<ApplicationListItemDto?> DeleteAsync(Guid orgId, Guid applicationId)
+    public Task<bool> DeleteAsync(Guid orgId, Guid applicationId)
     {
-        // Soft delete recommended: archive.
-        return _repo.SoftArchiveAsync(orgId, applicationId);
+        return _repo.DeletePermanentlyAsync(orgId, applicationId);
     }
 }
 
