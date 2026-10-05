@@ -493,8 +493,8 @@ public class ApplicationsRepository : IApplicationsRepository
             INSERT INTO applications (id, org_id, job_id, candidate_id, current_stage_id, status, applied_at, created_at, updated_at)
             VALUES (
                 @Id,
-                @OrgId,
-                @JobId,
+                @orgId,
+                @jobId,
                 @CandidateId,
                 @CurrentStageId,
                 @Status,
@@ -515,10 +515,10 @@ public class ApplicationsRepository : IApplicationsRepository
                 a.created_at AS CreatedAt,
                 leadFit.fit_score AS FitScore
             FROM applications a
-            INNER JOIN jobs j ON j.id = a.job_id AND j.org_id = @OrgId
-            INNER JOIN candidates c ON c.id = a.candidate_id AND c.org_id = @OrgId
+            INNER JOIN jobs j ON j.id = a.job_id AND j.org_id = @orgId
+            INNER JOIN candidates c ON c.id = a.candidate_id AND c.org_id = @orgId
             " + FitScoreJoin + @"
-            WHERE a.org_id = @OrgId AND a.id = @Id;";
+            WHERE a.org_id = @orgId AND a.id = @Id;";
 
         var connection = transaction?.Connection ?? _connectionFactory.CreateConnection();
         var ownsConnection = transaction == null;
@@ -533,10 +533,8 @@ public class ApplicationsRepository : IApplicationsRepository
             return await connection.QuerySingleAsync<ApplicationCardDto>(sql, new
             {
                 Id = id,
-                OrgId = orgId,
                 orgId,
                 jobId,
-                JobId = jobId,
                 CandidateId = candidateId,
                 CurrentStageId = currentStageId,
                 Status = status
