@@ -298,6 +298,57 @@ END";
         await connection.ExecuteAsync(new CommandDefinition(sql, cancellationToken: cancellationToken));
     }
 
+    private static int _messageDeliverySchemaReady;
+
+    public async Task EnsureMessageDeliverySchemaAsync(CancellationToken cancellationToken = default)
+    {
+        if (Volatile.Read(ref _messageDeliverySchemaReady) == 1)
+            return;
+
+        const string sql = @"
+IF COL_LENGTH('dbo.whatsapp_messages', 'delivery_status') IS NULL
+    EXEC(N'ALTER TABLE dbo.whatsapp_messages ADD delivery_status NVARCHAR(32) NULL;');
+IF COL_LENGTH('dbo.whatsapp_messages', 'delivery_error_code') IS NULL
+    EXEC(N'ALTER TABLE dbo.whatsapp_messages ADD delivery_error_code NVARCHAR(16) NULL;');
+IF COL_LENGTH('dbo.whatsapp_messages', 'delivery_checked_at_utc') IS NULL
+    EXEC(N'ALTER TABLE dbo.whatsapp_messages ADD delivery_checked_at_utc DATETIMEOFFSET(7) NULL;');";
+
+        using var connection = _connectionFactory.CreateConnection();
+        await connection.ExecuteAsync(new CommandDefinition(sql, cancellationToken: cancellationToken));
+        Volatile.Write(ref _messageDeliverySchemaReady, 1);
+    }
+
+    public async Task UpdateMessageDeliveryAsync(
+        Guid messageId,
+        string status,
+        string? errorCode,
+        CancellationToken cancellationToken = default)
+    {
+        await EnsureMessageDeliverySchemaAsync(cancellationToken);
+        const string sql = @"
+            UPDATE whatsapp_messages
+            SET delivery_status = @Status,
+                delivery_error_code = @ErrorCode,
+                delivery_checked_at_utc = SYSDATETIMEOFFSET()
+            WHERE id = @Id;";
+
+        using var connection = _connectionFactory.CreateConnection();
+        await connection.ExecuteAsync(
+            new CommandDefinition(sql, new { Id = messageId, Status = status, ErrorCode = errorCode }, cancellationToken: cancellationToken));
+    }
+
+    public async Task TouchMessageDeliveryCheckAsync(Guid messageId, CancellationToken cancellationToken = default)
+    {
+        await EnsureMessageDeliverySchemaAsync(cancellationToken);
+        const string sql = @"
+            UPDATE whatsapp_messages
+            SET delivery_checked_at_utc = SYSDATETIMEOFFSET()
+            WHERE id = @Id;";
+
+        using var connection = _connectionFactory.CreateConnection();
+        await connection.ExecuteAsync(new CommandDefinition(sql, new { Id = messageId }, cancellationToken: cancellationToken));
+    }
+
     public async Task EnsureConversationReadSchemaAsync(CancellationToken cancellationToken = default)
     {
         const string sql = @"
@@ -446,7 +497,8 @@ WHEN NOT MATCHED THEN
                 direction,
                 body,
                 media_json,
-                created_at_utc
+                created_at_utc,
+                delivery_status
             )
             VALUES (
                 @Id,
@@ -457,7 +509,8 @@ WHEN NOT MATCHED THEN
                 'outbound',
                 @Body,
                 '[]',
-                @NowUtc
+                @NowUtc,
+                'queued'
             );";
 
         const string updateConversationSql = @"
@@ -467,6 +520,7 @@ WHEN NOT MATCHED THEN
                 updated_at_utc = @NowUtc
             WHERE id = @ConversationId;";
 
+        await EnsureMessageDeliverySchemaAsync(cancellationToken);
         var nowUtc = DateTimeOffset.UtcNow;
         using var connection = _connectionFactory.CreateConnection();
         if (connection.State != ConnectionState.Open)
@@ -563,6 +617,7 @@ WHEN NOT MATCHED THEN
                 c.id AS Id,
                 c.phone_number AS PhoneNumber,
                 c.profile_name AS ProfileName,
+                nameMatch.CandidateName AS CandidateName,
                 c.candidate_id AS CandidateId,
                 c.job_id AS JobId,
                 c.application_id AS ApplicationId,
@@ -587,6 +642,35 @@ WHEN NOT MATCHED THEN
                       )
                 ) AS UnreadCount
             FROM whatsapp_conversations c
+            OUTER APPLY (
+                SELECT TOP 1
+                    NULLIF(LTRIM(RTRIM(CONCAT(ISNULL(cand.first_name, N''), N' ', ISNULL(cand.last_name, N'')))), N'') AS CandidateName
+                FROM candidates cand
+                CROSS APPLY (
+                    SELECT
+                        REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(ISNULL(c.phone_number, N'')), N'whatsapp:', N''), N' ', N''), N'-', N''), N'(', N''), N')', N''), N'+', N'') AS ConversationDigits,
+                        REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ISNULL(cand.phone, N''), N' ', N''), N'-', N''), N'(', N''), N')', N''), N'+', N'') AS CandidateDigits
+                ) phones
+                WHERE cand.org_id = COALESCE(
+                        TRY_CONVERT(uniqueidentifier, c.tenant_id),
+                        TRY_CONVERT(uniqueidentifier, @tenantId),
+                        (
+                            SELECT TOP 1 m.org_id
+                            FROM whatsapp_tenant_mappings m
+                            WHERE m.messenger_tenant = c.tenant_id
+                        )
+                      )
+                  AND NULLIF(LTRIM(RTRIM(CONCAT(ISNULL(cand.first_name, N''), N' ', ISNULL(cand.last_name, N'')))), N'') IS NOT NULL
+                  AND (
+                        cand.id = c.candidate_id
+                     OR (
+                            LEN(phones.ConversationDigits) >= 10
+                        AND LEN(phones.CandidateDigits) >= 10
+                        AND RIGHT(phones.ConversationDigits, 10) = RIGHT(phones.CandidateDigits, 10)
+                        )
+                      )
+                ORDER BY CASE WHEN cand.id = c.candidate_id THEN 0 ELSE 1 END
+            ) nameMatch
             WHERE (
                     c.tenant_id = @tenantId
                  OR c.tenant_id = CONVERT(nvarchar(100), TRY_CONVERT(uniqueidentifier, @tenantId))
@@ -764,6 +848,7 @@ WHEN NOT MATCHED THEN
 
     public async Task<IReadOnlyList<WhatsAppConversationMessageDto>> GetConversationMessagesAsync(Guid conversationId, string tenantId)
     {
+        await EnsureMessageDeliverySchemaAsync();
         const string sql = @"
             SELECT
                 m.id AS Id,
@@ -773,7 +858,10 @@ WHEN NOT MATCHED THEN
                 CASE WHEN m.direction = 'inbound' THEN c.phone_number ELSE NULL END AS FromPhone,
                 CASE WHEN m.direction = 'outbound' THEN c.phone_number ELSE NULL END AS ToPhone,
                 m.body AS Body,
-                m.created_at_utc AS CreatedAtUtc
+                m.created_at_utc AS CreatedAtUtc,
+                m.delivery_status AS DeliveryStatus,
+                m.delivery_error_code AS DeliveryErrorCode,
+                m.delivery_checked_at_utc AS DeliveryCheckedAtUtc
             FROM whatsapp_messages m
             INNER JOIN whatsapp_conversations c
                 ON c.id = m.conversation_id
@@ -796,6 +884,19 @@ WHEN NOT MATCHED THEN
         using var connection = _connectionFactory.CreateConnection();
         var rows = await connection.QueryAsync<WhatsAppConversationMessageDto>(sql, new { conversationId, tenantId });
         return rows.ToList();
+    }
+
+    public async Task<DateTimeOffset?> GetLastInboundAtUtcAsync(Guid conversationId, CancellationToken cancellationToken = default)
+    {
+        const string sql = @"
+            SELECT MAX(created_at_utc)
+            FROM whatsapp_messages
+            WHERE conversation_id = @conversationId
+              AND LOWER(LTRIM(RTRIM(direction))) = 'inbound';";
+
+        using var connection = _connectionFactory.CreateConnection();
+        return await connection.ExecuteScalarAsync<DateTimeOffset?>(
+            new CommandDefinition(sql, new { conversationId }, cancellationToken: cancellationToken));
     }
 
     public async Task<WhatsAppConversationSendContextDto?> GetConversationSendContextAsync(Guid conversationId, string tenantId)
@@ -968,7 +1069,8 @@ WHEN NOT MATCHED THEN
                 direction,
                 body,
                 media_json,
-                created_at_utc
+                created_at_utc,
+                delivery_status
             )
             VALUES (
                 @Id,
@@ -979,7 +1081,8 @@ WHEN NOT MATCHED THEN
                 'outbound',
                 @Body,
                 '[]',
-                @NowUtc
+                @NowUtc,
+                'queued'
             );";
 
         const string updateConversationSql = @"
@@ -991,6 +1094,7 @@ WHEN NOT MATCHED THEN
             WHERE id = @ConversationId
               AND tenant_id = @TenantId;";
 
+        await EnsureMessageDeliverySchemaAsync(cancellationToken);
         var messageId = Guid.NewGuid();
         var nowUtc = DateTimeOffset.UtcNow;
         using var connection = _connectionFactory.CreateConnection();

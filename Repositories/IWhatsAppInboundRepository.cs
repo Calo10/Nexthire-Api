@@ -16,6 +16,16 @@ public interface IWhatsAppInboundRepository
 
     Task EnsureConversationReadSchemaAsync(CancellationToken cancellationToken = default);
 
+    Task EnsureMessageDeliverySchemaAsync(CancellationToken cancellationToken = default);
+
+    Task UpdateMessageDeliveryAsync(
+        Guid messageId,
+        string status,
+        string? errorCode,
+        CancellationToken cancellationToken = default);
+
+    Task TouchMessageDeliveryCheckAsync(Guid messageId, CancellationToken cancellationToken = default);
+
     Task<bool> MarkConversationReadAsync(Guid conversationId, string tenantId, CancellationToken cancellationToken = default);
 
     Task SyncTenantMappingsFromConfigAsync(IConfiguration configuration, CancellationToken cancellationToken = default);
@@ -48,6 +58,8 @@ public interface IWhatsAppInboundRepository
     Task<IReadOnlyList<WhatsAppConversationMessageDto>> GetConversationMessagesAsync(Guid conversationId, string tenantId);
 
     Task<WhatsAppConversationSendContextDto?> GetConversationSendContextAsync(Guid conversationId, string tenantId);
+
+    Task<DateTimeOffset?> GetLastInboundAtUtcAsync(Guid conversationId, CancellationToken cancellationToken = default);
 
     Task<WhatsAppConversationSendContextDto> EnsureConversationForDirectSendAsync(
         string tenantId,

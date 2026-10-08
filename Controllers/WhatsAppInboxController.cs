@@ -97,6 +97,10 @@ public class WhatsAppInboxController : ControllerBase
             var response = await _service.SendMessageAsync(conversationId, request, cancellationToken);
             return Ok(response);
         }
+        catch (WhatsAppCustomerCareWindowException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
         catch (KeyNotFoundException)
         {
             return NotFound(new { message = "Conversation not found." });
@@ -126,6 +130,10 @@ public class WhatsAppInboxController : ControllerBase
         {
             var response = await _service.SendDirectMessageAsync(request, cancellationToken);
             return Ok(response);
+        }
+        catch (WhatsAppCustomerCareWindowException ex)
+        {
+            return Conflict(new { message = ex.Message });
         }
         catch (Exception ex)
         {
@@ -166,6 +174,41 @@ public class WhatsAppInboxController : ControllerBase
         {
             _logger.LogError(ex, "WhatsApp introduction failed. CandidateId={CandidateId}", request.CandidateId);
             return StatusCode(500, new { message = "Failed to send WhatsApp introduction." });
+        }
+    }
+
+    [HttpPost("send-follow-up")]
+    [Authorize]
+    public async Task<ActionResult<SendWhatsAppIntroductionResponseDto>> SendFollowUp(
+        [FromBody] SendWhatsAppIntroductionRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        if (request == null || request.CandidateId == Guid.Empty)
+            return BadRequest(new { message = "candidateId is required." });
+
+        try
+        {
+            var orgId = ClaimUtils.RequireOrgId(User);
+            var nexaUserId = ClaimUtils.RequireNexaUserId(User);
+            var response = await _service.SendFollowUpAsync(orgId, nexaUserId, request.CandidateId, cancellationToken);
+            return Ok(response);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized(new { message = "Missing or invalid organization or user identity." });
+        }
+        catch (WhatsAppIntroductionException ex)
+        {
+            _logger.LogWarning(
+                "WhatsApp follow-up rejected. Status={Status} Reason={Reason}",
+                ex.StatusCode,
+                ex.Message);
+            return StatusCode(ex.StatusCode, new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "WhatsApp follow-up failed. CandidateId={CandidateId}", request.CandidateId);
+            return StatusCode(500, new { message = "Failed to send WhatsApp follow-up." });
         }
     }
 

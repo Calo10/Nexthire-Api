@@ -465,6 +465,7 @@ static async Task EnsureWhatsAppTenantMappingsAsync(IServiceProvider services)
     {
         await repo.EnsureTenantMappingsSchemaAsync();
         await repo.EnsureConversationReadSchemaAsync();
+        await repo.EnsureMessageDeliverySchemaAsync();
         await repo.SyncTenantMappingsFromConfigAsync(configuration);
         logger.LogInformation("whatsapp_tenant_mappings table is ready.");
     }

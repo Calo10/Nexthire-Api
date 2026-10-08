@@ -1,3 +1,5 @@
+using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using nexthire_api.DTOs;
@@ -32,6 +34,7 @@ public class WhatsAppInboundService : IWhatsAppInboundService
     private readonly IUserRepository _users;
     private readonly INexaClient _nexaClient;
     private readonly INexaAccessTokenResolver _nexaAccessTokens;
+    private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<WhatsAppInboundService> _logger;
 
     public WhatsAppInboundService(
@@ -48,6 +51,7 @@ public class WhatsAppInboundService : IWhatsAppInboundService
         IUserRepository users,
         INexaClient nexaClient,
         INexaAccessTokenResolver nexaAccessTokens,
+        IHttpClientFactory httpClientFactory,
         ILogger<WhatsAppInboundService> logger)
     {
         _repository = repository;
@@ -63,6 +67,7 @@ public class WhatsAppInboundService : IWhatsAppInboundService
         _users = users;
         _nexaClient = nexaClient;
         _nexaAccessTokens = nexaAccessTokens;
+        _httpClientFactory = httpClientFactory;
         _logger = logger;
     }
 
@@ -226,7 +231,7 @@ public class WhatsAppInboundService : IWhatsAppInboundService
         if (conversation == null)
             return null;
 
-        var messages = await _repository.GetConversationMessagesAsync(conversation.Id, tenantId);
+        var messages = await GetConversationMessagesAsync(conversation.Id, tenantId);
         return new WhatsAppCandidateConversationDto
         {
             Conversation = conversation,
@@ -234,9 +239,11 @@ public class WhatsAppInboundService : IWhatsAppInboundService
         };
     }
 
-    public Task<IReadOnlyList<WhatsAppConversationMessageDto>> GetConversationMessagesAsync(Guid conversationId, string tenantId)
+    public async Task<IReadOnlyList<WhatsAppConversationMessageDto>> GetConversationMessagesAsync(Guid conversationId, string tenantId)
     {
-        return _repository.GetConversationMessagesAsync(conversationId, tenantId);
+        var messages = (await _repository.GetConversationMessagesAsync(conversationId, tenantId)).ToList();
+        await RefreshOutboundDeliveryAsync(tenantId, messages, CancellationToken.None);
+        return messages;
     }
 
     public async Task<SendWhatsAppMessageResponseDto> SendMessageAsync(
@@ -248,6 +255,7 @@ public class WhatsAppInboundService : IWhatsAppInboundService
         if (context == null)
             throw new KeyNotFoundException("Conversation not found.");
 
+        await EnsureCustomerCareWindowAsync(conversationId, cancellationToken);
         var twilio = await ResolveTwilioCredentialsAsync(request.TenantId, cancellationToken);
 
         var providerMessageId = await _messengerClient.SendMessageAsync(
@@ -285,6 +293,7 @@ public class WhatsAppInboundService : IWhatsAppInboundService
             request.CandidateId,
             cancellationToken);
 
+        await EnsureCustomerCareWindowAsync(context.Id, cancellationToken);
         var twilio = await ResolveTwilioCredentialsAsync(request.TenantId, cancellationToken);
 
         var providerMessageId = await _messengerClient.SendMessageAsync(
@@ -332,10 +341,76 @@ public class WhatsAppInboundService : IWhatsAppInboundService
             throw new WhatsAppIntroductionException("Candidate phone is not available.");
 
         var recruiterName = await ResolveRecruiterNameAsync(orgId, nexaUserId, cancellationToken);
+        var candidateName = await ResolveCandidateNameAsync(orgId, nexaUserId, candidate, cancellationToken);
         var organizationName = await ResolveOrganizationNameAsync(orgId, nexaUserId, cancellationToken);
+        return await SendContentTemplateAsync(
+            orgId,
+            candidate,
+            phone,
+            recruiterName,
+            candidateName,
+            organizationName,
+            static twilio => WhatsAppIntroductionRules.RequireContentSid(twilio.DefaultWhatsAppContentSid),
+            WhatsAppIntroductionHistoryText.Format,
+            "introduction",
+            cancellationToken);
+    }
+
+    public async Task<SendWhatsAppIntroductionResponseDto> SendFollowUpAsync(
+        Guid orgId,
+        Guid nexaUserId,
+        Guid candidateId,
+        CancellationToken cancellationToken)
+    {
+        if (orgId == Guid.Empty || nexaUserId == Guid.Empty)
+            throw new UnauthorizedAccessException("Missing or invalid organization or user identity.");
+        if (candidateId == Guid.Empty)
+            throw new WhatsAppIntroductionException("candidateId is required.");
+
+        var candidate = await _candidates.GetByIdAsync(orgId, candidateId);
+        if (candidate == null)
+            throw new WhatsAppIntroductionException("Candidate was not found.", 404);
+
+        var phone = WhatsAppPhoneNormalizer.NormalizeForConversation(candidate.Phone);
+        if (string.IsNullOrWhiteSpace(phone))
+            throw new WhatsAppIntroductionException("Candidate phone is not available.");
+
+        var recruiterName = await ResolveRecruiterNameAsync(orgId, nexaUserId, cancellationToken);
+        var candidateName = await ResolveCandidateNameAsync(orgId, nexaUserId, candidate, cancellationToken);
+        var organizationName = await ResolveOrganizationNameAsync(orgId, nexaUserId, cancellationToken);
+        return await SendContentTemplateAsync(
+            orgId,
+            candidate,
+            phone,
+            recruiterName,
+            candidateName,
+            organizationName,
+            twilio =>
+            {
+                if (string.IsNullOrWhiteSpace(twilio.FollowUpWhatsAppContentSid))
+                    throw new WhatsAppIntroductionException("Twilio FollowUpWhatsAppContentSid is not configured for this organization.");
+                return twilio.FollowUpWhatsAppContentSid.Trim();
+            },
+            WhatsAppFollowUpHistoryText.Format,
+            "follow-up",
+            cancellationToken);
+    }
+
+    private async Task<SendWhatsAppIntroductionResponseDto> SendContentTemplateAsync(
+        Guid orgId,
+        CandidateDto candidate,
+        string phone,
+        string recruiterName,
+        string candidateName,
+        string organizationName,
+        Func<TwilioOrgCredentials, string> resolveContentSid,
+        Func<string, string, string, string> history,
+        string purpose,
+        CancellationToken cancellationToken)
+    {
         var variables = WhatsAppIntroductionRules.BuildVariables(
             recruiterName,
-            WhatsAppIntroductionRules.JoinPersonName(candidate.FirstName, candidate.LastName),
+            candidateName,
             organizationName);
 
         TwilioOrgCredentials twilio;
@@ -345,17 +420,17 @@ public class WhatsAppInboundService : IWhatsAppInboundService
         }
         catch (InvalidOperationException ex)
         {
-            _logger.LogWarning(ex, "WhatsApp introduction Twilio configuration is unavailable. OrgId={OrgId}", orgId);
+            _logger.LogWarning(ex, "WhatsApp {Purpose} Twilio configuration is unavailable. OrgId={OrgId}", purpose, orgId);
             throw new WhatsAppIntroductionException(WhatsAppIntroductionRules.SafeTwilioConfigurationMessage(ex.Message));
         }
 
-        var contentSid = WhatsAppIntroductionRules.RequireContentSid(twilio.DefaultWhatsAppContentSid);
-        var historyText = WhatsAppIntroductionHistoryText.Format(variables["1"], variables["2"], variables["3"]);
+        var contentSid = resolveContentSid(twilio);
+        var historyText = history(recruiterName, candidateName, organizationName);
         var tenantId = orgId.ToString("D");
         var context = await _repository.EnsureConversationForDirectSendAsync(
             tenantId,
             phone,
-            candidateId,
+            candidate.Id,
             cancellationToken);
 
         string? providerMessageId;
@@ -373,11 +448,12 @@ public class WhatsAppInboundService : IWhatsAppInboundService
         {
             _logger.LogError(
                 ex,
-                "WhatsApp introduction send failed. OrgId={OrgId} CandidateId={CandidateId} ContentSid={ContentSid}",
+                "WhatsApp {Purpose} send failed. OrgId={OrgId} CandidateId={CandidateId} ContentSid={ContentSid}",
+                purpose,
                 orgId,
-                candidateId,
+                candidate.Id,
                 contentSid);
-            throw new WhatsAppIntroductionException("Failed to send WhatsApp introduction.", 502);
+            throw new WhatsAppIntroductionException("Failed to send WhatsApp template.", 502);
         }
 
         var messageId = await _repository.SaveOutboundMessageForInboxAsync(
@@ -1050,34 +1126,90 @@ public class WhatsAppInboundService : IWhatsAppInboundService
         CancellationToken cancellationToken)
     {
         var local = await _users.GetByNexaUserIdAsync(orgId, nexaUserId);
-        var localName = local == null
-            ? null
-            : WhatsAppIntroductionRules.JoinPersonName(local.FirstName, local.LastName);
+        var displayName = WhatsAppIntroductionRules.PersonNameOrNull(local?.DisplayName, local?.Email);
+        if (!string.IsNullOrWhiteSpace(displayName))
+            return displayName;
+
+        var localName = WhatsAppIntroductionRules.PersonNameOrNull(
+            local == null ? null : WhatsAppIntroductionRules.JoinPersonName(local.FirstName, local.LastName),
+            local?.Email);
         if (!string.IsNullOrWhiteSpace(localName))
             return localName;
 
+        var nexaName = await TryNexaPersonNameAsync(
+            orgId,
+            nexaUserId,
+            member => member.UserId == nexaUserId,
+            cancellationToken);
+        if (!string.IsNullOrWhiteSpace(nexaName))
+            return nexaName;
+
+        throw new WhatsAppIntroductionException("Recruiter name is not available.");
+    }
+
+    private async Task<string> ResolveCandidateNameAsync(
+        Guid orgId,
+        Guid nexaUserId,
+        CandidateDto candidate,
+        CancellationToken cancellationToken)
+    {
+        var storedName = WhatsAppIntroductionRules.PersonNameOrNull(
+            WhatsAppIntroductionRules.JoinPersonName(candidate.FirstName, candidate.LastName),
+            candidate.Email);
+        if (!string.IsNullOrWhiteSpace(storedName))
+            return storedName;
+
+        if (!string.IsNullOrWhiteSpace(candidate.Email))
+        {
+            var user = await _users.GetByEmailAsync(orgId, candidate.Email);
+            var userName = WhatsAppIntroductionRules.PersonNameOrNull(
+                user == null ? null : WhatsAppIntroductionRules.JoinPersonName(user.FirstName, user.LastName),
+                user?.Email ?? candidate.Email);
+            if (!string.IsNullOrWhiteSpace(userName))
+                return userName;
+
+            var nexaName = await TryNexaPersonNameAsync(
+                orgId,
+                nexaUserId,
+                member => string.Equals(member.Email, candidate.Email, StringComparison.OrdinalIgnoreCase),
+                cancellationToken);
+            if (!string.IsNullOrWhiteSpace(nexaName))
+                return nexaName;
+        }
+
+        var fallback = WhatsAppIntroductionRules.JoinPersonName(candidate.FirstName, candidate.LastName);
+        if (!string.IsNullOrWhiteSpace(fallback))
+            return fallback;
+
+        throw new WhatsAppIntroductionException("Candidate name is not available.");
+    }
+
+    private async Task<string?> TryNexaPersonNameAsync(
+        Guid orgId,
+        Guid nexaUserId,
+        Func<NexaOrgMemberDto, bool> match,
+        CancellationToken cancellationToken)
+    {
         var token = await _nexaAccessTokens.GetValidAccessTokenAsync(
             nexaUserId.ToString(),
             cancellationToken: cancellationToken);
-        if (!string.IsNullOrWhiteSpace(token))
-        {
-            try
-            {
-                var members = await _nexaClient.ListOrgMembersAsync(orgId, token, cancellationToken);
-                var member = members.FirstOrDefault(m => m.UserId == nexaUserId);
-                if (!string.IsNullOrWhiteSpace(member?.FullName))
-                    return member.FullName.Trim();
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                _logger.LogWarning(
-                    ex,
-                    "WhatsApp introduction could not load recruiter name from Nexa members. OrgId={OrgId}",
-                    orgId);
-            }
-        }
+        if (string.IsNullOrWhiteSpace(token))
+            return null;
 
-        throw new WhatsAppIntroductionException("Recruiter name is not available.");
+        try
+        {
+            var members = await _nexaClient.ListOrgMembersAsync(orgId, token, cancellationToken);
+            var member = members.FirstOrDefault(match);
+            return WhatsAppIntroductionRules.PersonNameOrNull(member?.FullName, member?.Email);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(
+                ex,
+                "WhatsApp introduction could not load a person name from Nexa members. OrgId={OrgId}",
+                orgId);
+            return null;
+        }
     }
 
     private async Task<string> ResolveOrganizationNameAsync(
@@ -1113,6 +1245,94 @@ public class WhatsAppInboundService : IWhatsAppInboundService
             _logger.LogWarning(ex, "WhatsApp introduction organization lookup failed. OrgId={OrgId}", orgId);
             throw new WhatsAppIntroductionException("Organization name is not available.");
         }
+    }
+
+    private async Task RefreshOutboundDeliveryAsync(
+        string tenantId,
+        List<WhatsAppConversationMessageDto> messages,
+        CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var pending = messages
+            .Where(message => WhatsAppDeliveryRules.NeedsRefresh(
+                message.Direction,
+                message.ProviderMessageId,
+                message.DeliveryStatus,
+                message.DeliveryCheckedAtUtc,
+                now))
+            .Take(8)
+            .ToList();
+        if (pending.Count == 0)
+            return;
+
+        TwilioOrgCredentials credentials;
+        try
+        {
+            credentials = await ResolveTwilioCredentialsAsync(tenantId, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "WhatsApp delivery status was not refreshed because Twilio credentials are unavailable.");
+            return;
+        }
+
+        await Task.WhenAll(pending.Select(message => RefreshOneDeliveryAsync(credentials, message, cancellationToken)));
+    }
+
+    private async Task RefreshOneDeliveryAsync(
+        TwilioOrgCredentials credentials,
+        WhatsAppConversationMessageDto message,
+        CancellationToken cancellationToken)
+    {
+        var sid = message.ProviderMessageId!.Trim();
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(4));
+
+            using var client = _httpClientFactory.CreateClient("Twilio");
+            using var request = new HttpRequestMessage(
+                HttpMethod.Get,
+                $"https://api.twilio.com/2010-04-01/Accounts/{Uri.EscapeDataString(credentials.AccountSid)}/Messages/{Uri.EscapeDataString(sid)}.json");
+            var basic = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{credentials.AccountSid}:{credentials.AuthToken}"));
+            request.Headers.Authorization = new AuthenticationHeaderValue("Basic", basic);
+
+            using var response = await client.SendAsync(request, timeout.Token);
+            var body = await response.Content.ReadAsStringAsync(timeout.Token);
+            if (!response.IsSuccessStatusCode || !WhatsAppDeliveryRules.TryReadTwilioStatus(body, out var status, out var errorCode))
+            {
+                await _repository.TouchMessageDeliveryCheckAsync(message.Id, cancellationToken);
+                return;
+            }
+
+            message.DeliveryStatus = status;
+            message.DeliveryErrorCode = errorCode;
+            message.DeliveryCheckedAtUtc = DateTimeOffset.UtcNow;
+            await _repository.UpdateMessageDeliveryAsync(message.Id, status, errorCode, cancellationToken);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            await _repository.TouchMessageDeliveryCheckAsync(message.Id, CancellationToken.None);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "WhatsApp delivery lookup failed. MessageId={MessageId}", message.Id);
+            try
+            {
+                await _repository.TouchMessageDeliveryCheckAsync(message.Id, cancellationToken);
+            }
+            catch (Exception touchEx) when (touchEx is not OperationCanceledException)
+            {
+                _logger.LogWarning(touchEx, "WhatsApp delivery check timestamp was not saved. MessageId={MessageId}", message.Id);
+            }
+        }
+    }
+
+    private async Task EnsureCustomerCareWindowAsync(Guid conversationId, CancellationToken cancellationToken)
+    {
+        var lastInboundAt = await _repository.GetLastInboundAtUtcAsync(conversationId, cancellationToken);
+        if (!WhatsAppCustomerCareWindow.IsOpen(lastInboundAt, DateTimeOffset.UtcNow))
+            throw new WhatsAppCustomerCareWindowException();
     }
 
     private async Task<TwilioOrgCredentials> ResolveTwilioCredentialsAsync(

@@ -43,6 +43,26 @@ public class WhatsAppIntroductionTests
         var credentials = TwilioSourceConnectionConfigParser.Parse(json);
 
         credentials.DefaultWhatsAppContentSid.Should().Be("HX123");
+        credentials.FollowUpWhatsAppContentSid.Should().BeNull();
+    }
+
+    [Fact]
+    public void Follow_up_content_sid_is_read_separately()
+    {
+        const string json = """
+            {
+              "Twilio:AccountSid": "AC123",
+              "Twilio:AuthToken": "token",
+              "Twilio:DefaultFromWhatsAppNumber": "+14155238886",
+              "Twilio:DefaultWhatsAppContentSid": "HX123",
+              "Twilio:FollowUpWhatsAppContentSid": "HX999"
+            }
+            """;
+
+        var credentials = TwilioSourceConnectionConfigParser.Parse(json);
+
+        credentials.DefaultWhatsAppContentSid.Should().Be("HX123");
+        credentials.FollowUpWhatsAppContentSid.Should().Be("HX999");
     }
 
     [Fact]
@@ -87,16 +107,27 @@ public class WhatsAppIntroductionTests
     }
 
     [Fact]
-    public void Variables_use_recruiter_candidate_and_organization_order()
+    public void Email_local_part_is_not_used_as_a_person_name()
     {
-        var variables = WhatsAppIntroductionRules.BuildVariables("Yendry Fonseca", "Carlos Mendez", "NCA Hospitality");
+        WhatsAppIntroductionRules.IsAccountHandle("yendry.fonseca", "yendry.fonseca@gmail.com").Should().BeTrue();
+        WhatsAppIntroductionRules.PersonNameOrNull("yendry.fonseca", "yendry.fonseca@gmail.com").Should().BeNull();
+        WhatsAppIntroductionRules.PersonNameOrNull("Yendry Fonseca", "yendry.fonseca@gmail.com").Should().Be("Yendry Fonseca");
+    }
+
+    [Fact]
+    public void Variables_greet_the_candidate_and_introduce_the_recruiter()
+    {
+        var variables = WhatsAppIntroductionRules.BuildVariables("Yendry Fonseca", "Linda Rease", "EC Corp");
 
         variables.Should().Equal(new Dictionary<string, string>
         {
-            ["1"] = "Yendry Fonseca",
-            ["2"] = "Carlos Mendez",
-            ["3"] = "NCA Hospitality"
+            ["1"] = "Linda Rease",
+            ["2"] = "Yendry Fonseca",
+            ["3"] = "EC Corp"
         });
+
+        WhatsAppIntroductionHistoryText.Format("Yendry Fonseca", "Linda Rease", "EC Corp")
+            .Should().StartWith("Hola Linda Rease, soy Yendry Fonseca de EC Corp.");
     }
 
     [Fact]

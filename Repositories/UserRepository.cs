@@ -399,11 +399,14 @@ public class UserRepository : IUserRepository
 
     private static string BuildSelectSql(NhUsersSchema schema, string whereClause)
     {
+        var displayCol = schema.HasDisplayName
+            ? "u.display_name AS RawDisplayName"
+            : "CAST(NULL AS nvarchar(200)) AS RawDisplayName";
         var nameCols = schema.HasFirstName && schema.HasLastName
-            ? "u.first_name AS FirstName, u.last_name AS LastName"
+            ? $"u.first_name AS FirstName, u.last_name AS LastName, {displayCol}"
             : schema.HasDisplayName
                 ? "u.display_name AS RawDisplayName, CAST('' AS nvarchar(100)) AS FirstName, CAST('' AS nvarchar(100)) AS LastName"
-                : "CAST('' AS nvarchar(100)) AS FirstName, CAST('' AS nvarchar(100)) AS LastName";
+                : "CAST(NULL AS nvarchar(200)) AS RawDisplayName, CAST('' AS nvarchar(100)) AS FirstName, CAST('' AS nvarchar(100)) AS LastName";
 
         var phoneCol = schema.HasPhone ? "u.phone AS Phone" : "CAST(NULL AS nvarchar(50)) AS Phone";
         var nexaCol = schema.HasNexaUserId ? "u.nexa_user_id AS NexaUserId" : "CAST(NULL AS uniqueidentifier) AS NexaUserId";
@@ -532,6 +535,7 @@ public class UserRepository : IUserRepository
             Email = r.Email,
             FirstName = r.FirstName,
             LastName = r.LastName,
+            DisplayName = r.RawDisplayName,
             Phone = r.Phone,
             Status = r.NexaUserId.HasValue ? "active" : "invited",
             Roles = rolesByUser.TryGetValue(r.Id, out var roles) ? roles : [],

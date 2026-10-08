@@ -15,6 +15,8 @@ public class ApplicationCardDto
     public Guid Id { get; set; }
     public Guid CandidateId { get; set; }
     public string CandidateName { get; set; } = string.Empty;
+    public string? CandidateEmail { get; set; }
+    public string? CandidatePhone { get; set; }
     public Guid JobId { get; set; }
     public string JobTitle { get; set; } = string.Empty;
     public Guid CurrentStageId { get; set; }
