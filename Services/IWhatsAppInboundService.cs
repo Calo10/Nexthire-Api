@@ -29,6 +29,12 @@ public interface IWhatsAppInboundService
         Guid candidateId,
         CancellationToken cancellationToken);
 
+    Task<SendWhatsAppIntroductionResponseDto> SendFollowUpAsync(
+        Guid orgId,
+        Guid nexaUserId,
+        Guid candidateId,
+        CancellationToken cancellationToken);
+
     Task<bool> UpdateConversationAsync(
         Guid conversationId,
         string tenantId,

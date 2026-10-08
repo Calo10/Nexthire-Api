@@ -12,4 +12,9 @@ public sealed class TwilioOrgCredentials
     /// Optional for freeform sends. Required for introduction template sends.
     /// </summary>
     public string? DefaultWhatsAppContentSid { get; init; }
+
+    /// <summary>
+    /// Second Twilio Content SID, used only to reopen a conversation after the 24-hour window.
+    /// </summary>
+    public string? FollowUpWhatsAppContentSid { get; init; }
 }

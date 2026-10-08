@@ -54,13 +54,19 @@ public static class TwilioSourceConnectionConfigParser
             "twilio:DefaultWhatsAppContentSid",
             "defaultWhatsAppContentSid",
             "DefaultWhatsAppContentSid");
+        var followUpSid = ReadString(root,
+            "Twilio:FollowUpWhatsAppContentSid",
+            "twilio:FollowUpWhatsAppContentSid",
+            "followUpWhatsAppContentSid",
+            "FollowUpWhatsAppContentSid");
 
         return new TwilioOrgCredentials
         {
             AccountSid = accountSid.Trim(),
             AuthToken = authToken.Trim(),
             DefaultFromWhatsAppNumber = fromNumber.Trim(),
-            DefaultWhatsAppContentSid = string.IsNullOrWhiteSpace(contentSid) ? null : contentSid.Trim()
+            DefaultWhatsAppContentSid = string.IsNullOrWhiteSpace(contentSid) ? null : contentSid.Trim(),
+            FollowUpWhatsAppContentSid = string.IsNullOrWhiteSpace(followUpSid) ? null : followUpSid.Trim()
         };
     }
 

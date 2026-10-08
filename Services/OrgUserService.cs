@@ -150,6 +150,11 @@ public class OrgUserService : IOrgUserService
         return users;
     }
 
+    public Task<OrgUserDto?> GetCurrentAsync(Guid orgId, Guid nexaUserId, CancellationToken cancellationToken = default)
+    {
+        return _users.GetByNexaUserIdAsync(orgId, nexaUserId);
+    }
+
     public Task<OrgUserDto?> GetAsync(Guid orgId, Guid userId, CancellationToken cancellationToken = default)
     {
         return _users.GetByIdAsync(orgId, userId);

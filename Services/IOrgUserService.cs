@@ -6,6 +6,8 @@ public interface IOrgUserService
 {
     Task<IReadOnlyList<OrgUserDto>> ListAsync(Guid orgId, string requesterNexaUserId, CancellationToken cancellationToken = default);
     Task<OrgUserDto?> GetAsync(Guid orgId, Guid userId, CancellationToken cancellationToken = default);
+
+    Task<OrgUserDto?> GetCurrentAsync(Guid orgId, Guid nexaUserId, CancellationToken cancellationToken = default);
     Task<CreateOrgUserResponseDto> InviteAsync(
         Guid orgId,
         string requesterNexaUserId,

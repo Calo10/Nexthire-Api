@@ -55,6 +55,26 @@ public class OrgUsersController : ControllerBase
         }
     }
 
+    [HttpGet("me")]
+    [ProducesResponseType(typeof(OrgUserDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<OrgUserDto>> Me(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var orgId = ClaimUtils.RequireOrgId(User);
+            var nexaUserId = ClaimUtils.RequireNexaUserId(User);
+            var user = await _orgUsers.GetCurrentAsync(orgId, nexaUserId, cancellationToken);
+            if (user is null)
+                return NotFound(new { message = "User not found in this organization." });
+            return Ok(user);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { message = ex.Message });
+        }
+    }
+
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(OrgUserDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace nexthire_api.DTOs;
 
@@ -7,6 +8,7 @@ public class WhatsAppConversationListItemDto
     public Guid Id { get; set; }
     public string PhoneNumber { get; set; } = string.Empty;
     public string? ProfileName { get; set; }
+    public string? CandidateName { get; set; }
     public Guid? CandidateId { get; set; }
     public Guid? JobId { get; set; }
     public Guid? ApplicationId { get; set; }
@@ -28,6 +30,11 @@ public class WhatsAppConversationMessageDto
     public string? ToPhone { get; set; }
     public string Body { get; set; } = string.Empty;
     public DateTimeOffset CreatedAtUtc { get; set; }
+    /// <summary>Twilio delivery status for outbound messages: queued, sent, delivered, undelivered, failed, read.</summary>
+    public string? DeliveryStatus { get; set; }
+    public string? DeliveryErrorCode { get; set; }
+    [JsonIgnore]
+    public DateTimeOffset? DeliveryCheckedAtUtc { get; set; }
 }
 
 public class SendWhatsAppMessageRequestDto

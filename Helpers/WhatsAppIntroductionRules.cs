@@ -4,7 +4,7 @@ namespace nexthire_api.Helpers;
 
 /// <summary>
 /// Rules for the tenant-scoped WhatsApp introduction template.
-/// Variable order is fixed: 1 recruiter, 2 candidate, 3 organization.
+/// Variable order matches the approved template: 1 candidate, 2 recruiter display name, 3 organization.
 /// </summary>
 public static class WhatsAppIntroductionRules
 {
@@ -28,6 +28,40 @@ public static class WhatsAppIntroductionRules
         return string.IsNullOrWhiteSpace(name) ? null : name;
     }
 
+    /// <summary>
+    /// True when the stored "name" is the email or its local part, such as yendry.fonseca.
+    /// </summary>
+    public static bool IsAccountHandle(string? name, string? email)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return false;
+
+        var trimmed = name.Trim();
+        if (trimmed.Contains('@', StringComparison.Ordinal))
+            return true;
+
+        if (string.IsNullOrWhiteSpace(email))
+            return false;
+
+        var emailTrim = email.Trim();
+        if (trimmed.Equals(emailTrim, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var at = emailTrim.IndexOf('@');
+        if (at <= 0)
+            return false;
+
+        return trimmed.Equals(emailTrim[..at], StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static string? PersonNameOrNull(string? name, string? email)
+    {
+        if (string.IsNullOrWhiteSpace(name) || IsAccountHandle(name, email))
+            return null;
+
+        return name.Trim();
+    }
+
     public static Dictionary<string, string> BuildVariables(
         string? recruiterName,
         string? candidateName,
@@ -35,8 +69,8 @@ public static class WhatsAppIntroductionRules
     {
         return new Dictionary<string, string>
         {
-            ["1"] = RequireName(recruiterName, "Recruiter name is not available."),
-            ["2"] = RequireName(candidateName, "Candidate name is not available."),
+            ["1"] = RequireName(candidateName, "Candidate name is not available."),
+            ["2"] = RequireName(recruiterName, "Recruiter name is not available."),
             ["3"] = RequireName(organizationName, "Organization name is not available.")
         };
     }
