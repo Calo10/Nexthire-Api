@@ -135,6 +135,30 @@ public class JobsController : ControllerBase
     }
 
     /// <summary>
+    /// Bump the job updated date without changing any other field.
+    /// </summary>
+    [HttpPost("{id}/refresh")]
+    public async Task<ActionResult<JobDto>> RefreshUpdatedAt(Guid id)
+    {
+        try
+        {
+            if (!TryGetOrgId(out var orgId, out var unauthorized))
+                return unauthorized!;
+
+            var job = await _jobService.TouchUpdatedAtAsync(orgId, id);
+            if (job == null)
+                return NotFound($"Job with ID {id} not found");
+
+            return Ok(job);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error refreshing updated date for job {JobId}", id);
+            return StatusCode(500, "An error occurred while updating the job");
+        }
+    }
+
+    /// <summary>
     /// Delete a job. Returns 409 if the job has associated applications.
     /// </summary>
     [HttpDelete("{id}")]
