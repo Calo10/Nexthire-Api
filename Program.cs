@@ -195,6 +195,7 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddScoped<IOrgUserService, OrgUserService>();
 builder.Services.AddScoped<IOrgMembershipAuthorizationService, OrgMembershipAuthorizationService>();
 builder.Services.AddScoped<IOrganizationSettingsService, OrganizationSettingsService>();
+builder.Services.AddScoped<IPipelineStageSettingsService, PipelineStageSettingsService>();
 builder.Services.AddScoped<IOrgProvisioningService, OrgProvisioningService>();
 builder.Services.AddScoped<IAdminAccountService, AdminAccountService>();
 builder.Services.AddHttpContextAccessor();
