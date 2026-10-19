@@ -11,6 +11,7 @@ public interface IJobRepository
     Task<JobDto?> GetPublicOpenByIdAsync(Guid orgId, Guid id);
     Task<JobDto> CreateAsync(Guid orgId, Guid createdByUserId, CreateJobDto dto);
     Task<JobDto?> UpdateAsync(Guid orgId, Guid id, UpdateJobDto dto);
+    Task<JobDto?> TouchUpdatedAtAsync(Guid orgId, Guid id);
     Task<JobAdDesignDto?> GetAdDesignAsync(Guid orgId, Guid jobId, CancellationToken cancellationToken = default);
     Task<JobAdDesignDto?> SaveAdDesignAsync(Guid orgId, Guid jobId, SaveJobAdDesignRequest request, CancellationToken cancellationToken = default);
     Task<bool> DeleteAdDesignAsync(Guid orgId, Guid jobId, CancellationToken cancellationToken = default);

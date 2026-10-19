@@ -44,6 +44,11 @@ public class JobService : IJobService
         return await _repo.UpdateAsync(orgId, id, updateJobDto);
     }
 
+    public async Task<JobDto?> TouchUpdatedAtAsync(Guid orgId, Guid id)
+    {
+        return await _repo.TouchUpdatedAtAsync(orgId, id);
+    }
+
     public Task<JobAdDesignDto?> GetAdDesignAsync(Guid orgId, Guid jobId, CancellationToken cancellationToken = default)
         => _repo.GetAdDesignAsync(orgId, jobId, cancellationToken);
 

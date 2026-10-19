@@ -228,6 +228,29 @@ END";
         return result;
     }
 
+    public async Task<JobDto?> TouchUpdatedAtAsync(Guid orgId, Guid id)
+    {
+        await EnsureAdDesignSchemaAsync();
+
+        var sql = $@"
+            UPDATE jobs
+            SET updated_at = SYSDATETIMEOFFSET()
+            WHERE org_id = @OrgId AND id = @Id;
+
+            SELECT
+                {JobSelectColumns},
+                (
+                    SELECT COUNT(DISTINCT a.candidate_id)
+                    FROM applications a
+                    WHERE a.org_id = @OrgId AND a.job_id = j.id
+                ) AS ApplicantsCount
+            FROM jobs j
+            WHERE j.org_id = @OrgId AND j.id = @Id;";
+
+        using var connection = _connectionFactory.CreateConnection();
+        return await connection.QueryFirstOrDefaultAsync<JobDto>(sql, new { OrgId = orgId, Id = id });
+    }
+
     public async Task<JobAdDesignDto?> GetAdDesignAsync(
         Guid orgId,
         Guid jobId,
