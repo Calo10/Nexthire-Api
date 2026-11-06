@@ -55,13 +55,14 @@ public class CandidateRepository : ICandidateRepository
         }
         var tagFilter = tagIn.Count == 0
             ? string.Empty
-            : $@"
+            : string.Concat(tagIn.Select(tagParam => $@"
               AND EXISTS (
                     SELECT 1
                     FROM candidate_tag_assignments cta
-                    WHERE cta.candidate_id = c.id
-                      AND cta.tag_id IN ({string.Join(", ", tagIn)})
-                  )";
+                    WHERE cta.org_id = @orgId
+                      AND cta.candidate_id = c.id
+                      AND cta.tag_id = {tagParam}
+                  )"));
 
         var sortNormalized = string.IsNullOrWhiteSpace(sort) ? "created_at" : sort.Trim().ToLowerInvariant();
         if (sortNormalized != "created_at")
@@ -151,6 +152,78 @@ public class CandidateRepository : ICandidateRepository
             PageSize = pageSize,
             Total = total
         };
+    }
+
+    public async Task<bool> MatchesListFiltersAsync(
+        Guid orgId,
+        Guid candidateId,
+        string? search,
+        string? source,
+        DateTimeOffset? from,
+        DateTimeOffset? to,
+        IReadOnlyCollection<Guid>? tagIds)
+    {
+        var trimmedSearch = string.IsNullOrWhiteSpace(search) ? null : search.Trim();
+        var phoneDigits = trimmedSearch == null
+            ? string.Empty
+            : new string(trimmedSearch.Where(char.IsDigit).ToArray());
+        var trimmedSource = string.IsNullOrWhiteSpace(source) ? null : source.Trim();
+        var tagIdList = (tagIds ?? Array.Empty<Guid>()).Where(id => id != Guid.Empty).Distinct().ToArray();
+        var parameters = new DynamicParameters();
+        parameters.Add("orgId", orgId);
+        parameters.Add("candidateId", candidateId);
+        parameters.Add("search", trimmedSearch);
+        parameters.Add("phoneDigits", phoneDigits);
+        parameters.Add("source", trimmedSource);
+        parameters.Add("from", from);
+        parameters.Add("to", to);
+        var tagIn = new List<string>(tagIdList.Length);
+        for (var i = 0; i < tagIdList.Length; i++)
+        {
+            var name = $"tagId{i}";
+            parameters.Add(name, tagIdList[i]);
+            tagIn.Add("@" + name);
+        }
+        var tagFilter = tagIn.Count == 0
+            ? string.Empty
+            : string.Concat(tagIn.Select(tagParam => $@"
+              AND EXISTS (
+                    SELECT 1
+                    FROM candidate_tag_assignments cta
+                    WHERE cta.org_id = @orgId
+                      AND cta.candidate_id = c.id
+                      AND cta.tag_id = {tagParam}
+                  )"));
+
+        await EnsureTagsSchemaAsync();
+
+        var sql = $@"
+            SELECT CASE WHEN EXISTS (
+                SELECT 1
+                FROM candidates c
+                WHERE c.org_id = @orgId
+                  AND c.id = @candidateId
+                  AND (@source IS NULL OR c.source = @source)
+                  AND (@from IS NULL OR c.created_at >= @from)
+                  AND (@to IS NULL OR c.created_at <= @to)
+                  AND (
+                        @search IS NULL
+                        OR LOWER(c.first_name) LIKE '%' + LOWER(@search) + '%'
+                        OR LOWER(c.last_name) LIKE '%' + LOWER(@search) + '%'
+                        OR LOWER(CONCAT(c.first_name, ' ', c.last_name)) LIKE '%' + LOWER(@search) + '%'
+                        OR LOWER(c.email) LIKE '%' + LOWER(@search) + '%'
+                        OR LOWER(ISNULL(c.phone, '')) LIKE '%' + LOWER(@search) + '%'
+                        OR (
+                             @phoneDigits <> ''
+                             AND REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ISNULL(c.phone, ''), ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') LIKE '%' + @phoneDigits + '%'
+                           )
+                      )
+                  {tagFilter}
+            ) THEN 1 ELSE 0 END;";
+
+        using var connection = _connectionFactory.CreateConnection();
+        var matched = await connection.ExecuteScalarAsync<int>(sql, parameters);
+        return matched == 1;
     }
 
     public async Task<CandidateDto?> GetByIdAsync(Guid orgId, Guid id)

@@ -13,6 +13,7 @@ public interface INexaClient
     Task RequestPasswordResetAsync(string email, CancellationToken cancellationToken = default);
     Task ConfirmPasswordResetAsync(string token, string newPassword, CancellationToken cancellationToken = default);
     Task<NexaExchangeResponseDto> PasswordLoginAsync(string email, string password, CancellationToken cancellationToken = default);
+    Task<NexaExchangeResponseDto> SelectOrganizationAsync(Guid organizationId, string nexaAccessToken, CancellationToken cancellationToken = default);
     Task<(int StatusCode, string Content)> PasswordLoginRawAsync(string email, string password, CancellationToken cancellationToken = default);
     Task<object> SetPasswordAsync(string currentPassword, string newPassword, string confirmPassword, string nexaAccessToken, CancellationToken cancellationToken = default);
     Task<object> InitializePasswordAsync(string newPassword, string confirmPassword, string nexaAccessToken, CancellationToken cancellationToken = default);
@@ -21,7 +22,9 @@ public interface INexaClient
     Task<IReadOnlyList<NexaOrgInviteDto>> ListOrgInvitesAsync(Guid orgId, string nexaAccessToken, CancellationToken cancellationToken = default);
     Task<bool> RevokeOrgInviteAsync(Guid orgId, Guid inviteId, string nexaAccessToken, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<NexaOrgMemberDto>> ListOrgMembersAsync(Guid orgId, string nexaAccessToken, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<NexaLoginOrganizationDto>> ListMyOrganizationsAsync(string nexaAccessToken, CancellationToken cancellationToken = default);
     Task<NexaOrganizationDetailDto?> GetOrganizationAsync(Guid orgId, string nexaAccessToken, CancellationToken cancellationToken = default);
+    Task<string?> GetOrganizationStatusAsync(Guid orgId, CancellationToken cancellationToken = default);
     Task<NexaProvisionOrganizationResponse> ProvisionOrganizationAsync(
         string name,
         string timezone,
@@ -119,31 +122,15 @@ public class NexaClient : INexaClient
         {
             var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
             var statusCode = (int)response.StatusCode;
-            
-            // Try to extract error message from JSON response
-            string errorMessage = "Unknown error";
-            try
-            {
-                var errorJson = JsonSerializer.Deserialize<JsonElement>(errorContent);
-                if (errorJson.TryGetProperty("error", out var errorProp))
-                {
-                    errorMessage = errorProp.GetString() ?? errorMessage;
-                }
-            }
-            catch
-            {
-                // If parsing fails, use the raw content or default message
-                errorMessage = !string.IsNullOrEmpty(errorContent) ? errorContent : errorMessage;
-            }
-            
+
             _logger.LogError(
                 "Nexa token exchange failed. URL: {Url}, StatusCode: {StatusCode}, Response: {Response}",
                 fullUrl, response.StatusCode, errorContent);
-            
-            // For 400 or 401, throw NexaAuthException
-            if (statusCode == 400 || statusCode == 401)
+
+            if (statusCode == 400 || statusCode == 401 || statusCode == 403)
             {
-                throw new NexaAuthException(statusCode, errorMessage, errorContent);
+                var (errorMessage, code) = ReadNexaError(errorContent, "Unknown error");
+                throw new NexaAuthException(statusCode, errorMessage, errorContent, code);
             }
             
             // For other errors, throw generic HttpRequestException
@@ -368,23 +355,10 @@ public class NexaClient : INexaClient
                 };
             }
 
-            // For 400/401, throw NexaAuthException
-            if (statusCode == 400 || statusCode == 401)
+            if (statusCode == 400 || statusCode == 401 || statusCode == 403)
             {
-                string errorMessage = "Invalid credentials";
-                try
-                {
-                    var errorJson = JsonSerializer.Deserialize<JsonElement>(errorContent);
-                    if (errorJson.TryGetProperty("error", out var errorProp))
-                    {
-                        errorMessage = errorProp.GetString() ?? errorMessage;
-                    }
-                }
-                catch
-                {
-                    // Use default error message
-                }
-                throw new NexaAuthException(statusCode, errorMessage, errorContent);
+                var (errorMessage, code) = ReadNexaError(errorContent, "Invalid credentials");
+                throw new NexaAuthException(statusCode, errorMessage, errorContent, code);
             }
 
             // For other errors, throw generic exception
@@ -411,6 +385,36 @@ public class NexaClient : INexaClient
         }
 
         _logger.LogInformation("Password login successful in Nexa");
+        return result;
+    }
+
+    public async Task<NexaExchangeResponseDto> SelectOrganizationAsync(
+        Guid organizationId,
+        string nexaAccessToken,
+        CancellationToken cancellationToken = default)
+    {
+        var requestUrl = "/v1/auth/select-organization";
+        var requestMessage = new HttpRequestMessage(HttpMethod.Post, requestUrl)
+        {
+            Content = JsonContent.Create(new { organizationId })
+        };
+        requestMessage.Headers.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", nexaAccessToken);
+
+        var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
+        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            var statusCode = (int)response.StatusCode;
+            var (errorMessage, code) = ReadNexaError(responseContent, "Unable to select organization");
+            if (statusCode is 400 or 401 or 403 or 404)
+                throw new NexaAuthException(statusCode, errorMessage, responseContent, code);
+
+            throw new HttpRequestException($"Nexa API returned error: {response.StatusCode}");
+        }
+
+        var result = JsonSerializer.Deserialize<NexaExchangeResponseDto>(responseContent, JsonOptions)
+                     ?? throw new InvalidOperationException("Empty Nexa select organization response");
         return result;
     }
 
@@ -801,6 +805,41 @@ public class NexaClient : INexaClient
         return JsonSerializer.Deserialize<List<NexaOrgMemberDto>>(responseContent, JsonOptions) ?? [];
     }
 
+    public async Task<IReadOnlyList<NexaLoginOrganizationDto>> ListMyOrganizationsAsync(
+        string nexaAccessToken,
+        CancellationToken cancellationToken = default)
+    {
+        var requestMessage = new HttpRequestMessage(HttpMethod.Get, "/v1/orgs");
+        requestMessage.Headers.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", nexaAccessToken);
+        if (!string.IsNullOrEmpty(_apiKey))
+            requestMessage.Headers.Add("X-Nexa-Api-Key", _apiKey);
+
+        var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
+        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            var statusCode = (int)response.StatusCode;
+            var (errorMessage, code) = ReadNexaError(responseContent, "Unable to list organizations");
+            if (statusCode is 401 or 403)
+                throw new NexaAuthException(statusCode, errorMessage, responseContent, code);
+            throw new HttpRequestException($"Nexa API returned error: {response.StatusCode}");
+        }
+
+        var orgs = JsonSerializer.Deserialize<List<NexaListedOrganizationDto>>(responseContent, JsonOptions) ?? [];
+        return orgs
+            .Where(org => !string.IsNullOrWhiteSpace(org.OrganizationId))
+            .Select(org => new NexaLoginOrganizationDto
+            {
+                OrganizationId = org.OrganizationId,
+                Name = org.Name,
+                Status = string.IsNullOrWhiteSpace(org.Status)
+                    ? (org.IsActive ? "active" : "suspended")
+                    : org.Status
+            })
+            .ToList();
+    }
+
     public async Task<NexaOrganizationDetailDto?> GetOrganizationAsync(
         Guid orgId,
         string nexaAccessToken,
@@ -825,6 +864,46 @@ public class NexaClient : INexaClient
         }
 
         return JsonSerializer.Deserialize<NexaOrganizationDetailDto>(responseContent, JsonOptions);
+    }
+
+    public async Task<string?> GetOrganizationStatusAsync(Guid orgId, CancellationToken cancellationToken = default)
+    {
+        var provisioningApiKey = _configuration["Provisioning:ApiKey"]?.Trim();
+        if (string.IsNullOrWhiteSpace(provisioningApiKey))
+        {
+            _logger.LogWarning("Cannot check organization status because Provisioning:ApiKey is not configured");
+            return null;
+        }
+
+        var requestUrl = $"/v1/orgs/{orgId}/account-status";
+        var requestMessage = new HttpRequestMessage(HttpMethod.Get, requestUrl);
+        requestMessage.Headers.Add("X-Api-Key", provisioningApiKey);
+
+        try
+        {
+            var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
+            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                return null;
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning(
+                    "Nexa organization status check failed. OrgId={OrgId} Status={Status}",
+                    orgId, response.StatusCode);
+                return null;
+            }
+
+            var payload = JsonSerializer.Deserialize<JsonElement>(responseContent, JsonOptions);
+            if (payload.TryGetProperty("status", out var statusProp))
+                return statusProp.GetString();
+            return null;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            _logger.LogWarning(ex, "Nexa organization status check failed. OrgId={OrgId}", orgId);
+            return null;
+        }
     }
 
     public async Task<NexaProvisionOrganizationResponse> ProvisionOrganizationAsync(
@@ -942,6 +1021,29 @@ public class NexaClient : INexaClient
         catch (JsonException)
         {
             return null;
+        }
+    }
+
+    private static (string Message, string? Code) ReadNexaError(string errorContent, string fallback)
+    {
+        try
+        {
+            var errorJson = JsonSerializer.Deserialize<JsonElement>(errorContent);
+            var message = fallback;
+            if (errorJson.TryGetProperty("error", out var errorProp) && errorProp.ValueKind == JsonValueKind.String)
+                message = errorProp.GetString() ?? fallback;
+            else if (errorJson.TryGetProperty("message", out var messageProp) && messageProp.ValueKind == JsonValueKind.String)
+                message = messageProp.GetString() ?? fallback;
+
+            string? code = null;
+            if (errorJson.TryGetProperty("code", out var codeProp) && codeProp.ValueKind == JsonValueKind.String)
+                code = codeProp.GetString();
+
+            return (message, code);
+        }
+        catch
+        {
+            return (string.IsNullOrWhiteSpace(errorContent) ? fallback : errorContent, null);
         }
     }
 

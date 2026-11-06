@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Data.SqlClient;
@@ -17,6 +18,7 @@ public class CandidatesController : ControllerBase
 {
     private readonly ICandidateService _candidateService;
     private readonly ICandidateRepository _candidateRepo;
+    private readonly IPublicCandidateLinkRepository _publicLinks;
     private readonly IDocumentService _documentService;
     private readonly IResumeDocumentsUploader _resumeDocumentsUploader;
     private readonly IApplicationsService _applicationsService;
@@ -25,6 +27,7 @@ public class CandidatesController : ControllerBase
     public CandidatesController(
         ICandidateService candidateService,
         ICandidateRepository candidateRepo,
+        IPublicCandidateLinkRepository publicLinks,
         IDocumentService documentService,
         IResumeDocumentsUploader resumeDocumentsUploader,
         IApplicationsService applicationsService,
@@ -32,6 +35,7 @@ public class CandidatesController : ControllerBase
     {
         _candidateService = candidateService;
         _candidateRepo = candidateRepo;
+        _publicLinks = publicLinks;
         _documentService = documentService;
         _resumeDocumentsUploader = resumeDocumentsUploader;
         _applicationsService = applicationsService;
@@ -135,6 +139,121 @@ public class CandidatesController : ControllerBase
             _logger.LogError(ex, "Error getting candidates");
             return StatusCode(500, new { message = "An error occurred while retrieving candidates" });
         }
+    }
+
+    /// <summary>
+    /// Save the current candidate filters as a public link.
+    /// </summary>
+    [HttpPost("public-links")]
+    public async Task<ActionResult<PublicCandidateLinkCreatedDto>> CreatePublicLink([FromBody] CreatePublicCandidateLinkRequestDto request)
+    {
+        try
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+            if (request is null)
+                return BadRequest(new { message = "A filter is required" });
+
+            var orgId = ClaimUtils.RequireOrgId(User);
+            var userId = ClaimUtils.RequireUserId(User);
+
+            var search = string.IsNullOrWhiteSpace(request.Search) ? null : request.Search.Trim();
+            var source = string.IsNullOrWhiteSpace(request.Source) ? null : request.Source.Trim();
+            if (!TryParseFilterDate(request.From, out var from))
+                return BadRequest(new { message = "from is not a valid date" });
+            if (!TryParseFilterDate(request.To, out var to))
+                return BadRequest(new { message = "to is not a valid date" });
+            if (from.HasValue && to.HasValue && from.Value > to.Value)
+                return BadRequest(new { message = "from must be <= to" });
+
+            var tagIds = (request.TagIds ?? new List<Guid>())
+                .Where(id => id != Guid.Empty)
+                .Distinct()
+                .ToArray();
+            if (tagIds.Length > 20)
+                return BadRequest(new { message = "A public link can include at most 20 tags" });
+
+            if (search is null && source is null && !from.HasValue && !to.HasValue && tagIds.Length == 0)
+                return BadRequest(new { message = "A filter is required" });
+
+            var name = request.Name.Trim();
+            if (name.Length == 0)
+                return BadRequest(new { message = "name is required" });
+
+            var id = await _publicLinks.InsertAsync(orgId, userId, name, search, source, from, to, tagIds);
+            return StatusCode(StatusCodes.Status201Created, new PublicCandidateLinkCreatedDto { Id = id, Name = name });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            LogClaimsShapeForDebug();
+            return Unauthorized(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating public candidate link");
+            return StatusCode(500, new { message = "An error occurred while creating the public link" });
+        }
+    }
+
+    [HttpGet("public-links")]
+    public async Task<ActionResult<IReadOnlyList<PublicCandidateLinkAdminDto>>> ListPublicLinks()
+    {
+        try
+        {
+            var orgId = ClaimUtils.RequireOrgId(User);
+            _ = ClaimUtils.RequireUserId(User);
+            var links = await _publicLinks.ListByOrgAsync(orgId);
+            return Ok(links);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            LogClaimsShapeForDebug();
+            return Unauthorized(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error listing public candidate links");
+            return StatusCode(500, new { message = "An error occurred while retrieving public links" });
+        }
+    }
+
+    [HttpDelete("public-links/{id:guid}")]
+    public async Task<IActionResult> DeletePublicLink(Guid id)
+    {
+        try
+        {
+            var orgId = ClaimUtils.RequireOrgId(User);
+            _ = ClaimUtils.RequireUserId(User);
+            var deleted = await _publicLinks.DeleteAsync(orgId, id);
+            if (!deleted)
+                return NotFound(new { message = "Public candidate link not found" });
+            return NoContent();
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            LogClaimsShapeForDebug();
+            return Unauthorized(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting public candidate link {LinkId}", id);
+            return StatusCode(500, new { message = "An error occurred while deleting the public link" });
+        }
+    }
+
+    private static bool TryParseFilterDate(string? raw, out DateTimeOffset? value)
+    {
+        value = null;
+        if (string.IsNullOrWhiteSpace(raw))
+            return true;
+        if (!DateTimeOffset.TryParse(
+                raw.Trim(),
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AdjustToUniversal,
+                out var parsed))
+            return false;
+        value = parsed;
+        return true;
     }
 
     /// <summary>
@@ -325,7 +444,7 @@ public class CandidatesController : ControllerBase
     /// <summary>
     /// Get candidate by ID (org-scoped)
     /// </summary>
-    [HttpGet("{id}")]
+    [HttpGet("{id:guid}")]
     public async Task<ActionResult<CandidateDto>> GetCandidate(Guid id)
     {
         try

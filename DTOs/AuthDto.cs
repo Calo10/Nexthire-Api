@@ -21,6 +21,16 @@ public class ExchangeTokenResponseDto
     public NexaUserDto? User { get; set; }
     public NexaOrganizationDto? Organization { get; set; }
     public object? Features { get; set; }
+    public bool RequiresOrgSelection { get; set; }
+    public string? SelectionToken { get; set; }
+    public List<LoginOrganizationOptionDto> Organizations { get; set; } = [];
+}
+
+public class LoginOrganizationOptionDto
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
 }
 
 public class NexaTokensDto
@@ -38,8 +48,37 @@ public record NexaExchangeResponseDto(
     bool RequiresOrgSetup,
     NexaUserDto User,
     NexaOrganizationDto? Organization,
-    object? Features
+    object? Features,
+    bool RequiresOrgSelection = false,
+    List<NexaLoginOrganizationDto>? Organizations = null
 );
+
+public class NexaLoginOrganizationDto
+{
+    [JsonPropertyName("organizationId")]
+    public string? OrganizationId { get; set; }
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = string.Empty;
+}
+
+public class NexaListedOrganizationDto
+{
+    [JsonPropertyName("organizationId")]
+    public string? OrganizationId { get; set; }
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = string.Empty;
+
+    [JsonPropertyName("isActive")]
+    public bool IsActive { get; set; }
+}
 
 public record NexaUserDto(
     string UserId,
@@ -78,6 +117,17 @@ public class PasswordLoginRequestDto
 {
     public string Email { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
+}
+
+public class SelectOrganizationRequestDto
+{
+    public string SelectionToken { get; set; } = string.Empty;
+    public string OrganizationId { get; set; } = string.Empty;
+}
+
+public class SwitchOrganizationRequestDto
+{
+    public string OrganizationId { get; set; } = string.Empty;
 }
 
 public class SetPasswordRequestDto
