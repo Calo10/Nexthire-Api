@@ -5,6 +5,7 @@ using Microsoft.OpenApi.Models;
 using nexthire_api.Data;
 using nexthire_api.Options;
 using nexthire_api.Repositories;
+using nexthire_api.Security;
 using nexthire_api.Repositories.Sourcing;
 using nexthire_api.Services;
 using nexthire_api.Services.Sourcing;
@@ -222,6 +223,7 @@ builder.Services.AddScoped<IJobRepository, JobRepository>();
 builder.Services.AddScoped<IJobBotQuestionRepository, JobBotQuestionRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<ICandidateRepository, CandidateRepository>();
+builder.Services.AddScoped<IPublicCandidateLinkRepository, PublicCandidateLinkRepository>();
 builder.Services.AddScoped<IRoleRepository, RoleRepository>();
 builder.Services.AddScoped<ITeamRepository, TeamRepository>();
 builder.Services.AddScoped<INexaTokenRepository, NexaTokenRepository>();
@@ -417,6 +419,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<SalesAccessMiddleware>();
 app.MapControllers();
 
 await Task.WhenAll(

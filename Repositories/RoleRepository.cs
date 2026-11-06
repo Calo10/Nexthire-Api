@@ -155,8 +155,23 @@ public class RoleRepository : IRoleRepository
     [
         ("account_admin", "Account Admin"),
         ("supervisor", "Supervisor"),
-        ("recruiter", "Recruiter")
+        ("recruiter", "Recruiter"),
+        ("sales", "Sales")
     ];
+
+    public async Task<IReadOnlyList<string>> ListRoleCodesByNexaUserAsync(Guid orgId, Guid nexaUserId)
+    {
+        const string sql = @"
+            SELECT r.code
+            FROM nh_users u
+            INNER JOIN user_roles ur ON ur.user_id = u.id AND ur.org_id = @orgId
+            INNER JOIN roles r ON r.id = ur.role_id AND r.org_id = @orgId
+            WHERE u.org_id = @orgId AND u.nexa_user_id = @nexaUserId;";
+
+        using var connection = _connectionFactory.CreateConnection();
+        var codes = await connection.QueryAsync<string>(sql, new { orgId, nexaUserId });
+        return codes.Where(code => !string.IsNullOrWhiteSpace(code)).ToList();
+    }
 
     private static async Task EnsureRoleAsync(
         IDbConnection connection,
