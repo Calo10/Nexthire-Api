@@ -640,6 +640,9 @@ public class AuthController : ControllerBase
         if (!nexaResponse.RequiresOrgSelection || organizations.Count < 2)
             return null;
 
+        if (organizations.All(org => string.Equals(org.Status, "suspended", StringComparison.OrdinalIgnoreCase)))
+            return AccountSuspended();
+
         return Ok(new ExchangeTokenResponseDto
         {
             RequiresOrgSelection = true,
