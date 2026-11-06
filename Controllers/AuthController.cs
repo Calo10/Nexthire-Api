@@ -124,46 +124,18 @@ public class AuthController : ControllerBase
                 return StatusCode(500, new { message = "Invalid Nexa response format" });
             }
 
-            // Log response structure for debugging
             _logger.LogInformation(
-                "Nexa consume response received. RequiresOrgSetup: {RequiresOrgSetup}, HasOrganization: {HasOrganization}, HasFeatures: {HasFeatures}",
+                "Nexa consume response received. RequiresOrgSetup: {RequiresOrgSetup}, HasOrganization: {HasOrganization}, RequiresOrgSelection: {RequiresOrgSelection}",
                 nexaResponse.RequiresOrgSetup,
                 nexaResponse.Organization != null,
-                nexaResponse.Features != null);
+                nexaResponse.RequiresOrgSelection);
 
-            // Generate NextHire JWT with claims
-            var accessToken = _jwtTokenService.GenerateToken(
-                nexaResponse.User.UserId,
-                nexaResponse.User.Email,
-                nexaResponse.RequiresOrgSetup,
-                nexaResponse.Organization?.GetOrgId()
-            );
-
-            // Store Nexa tokens for later use (keyed by userId)
-            _logger.LogInformation("Storing Nexa tokens for user {UserId} after successful exchange. ExpiresAt: {ExpiresAt}", 
-                nexaResponse.User.UserId, nexaResponse.ExpiresAt);
-            await _nexaTokens.PersistTokensAsync(
-                nexaResponse.User.UserId,
-                nexaResponse.AccessToken,
-                nexaResponse.RefreshToken,
-                nexaResponse.ExpiresAt);
-
-            var response = new ExchangeTokenResponseDto
-            {
-                AccessToken = accessToken,
-                Nexa = new NexaTokensDto
-                {
-                    AccessToken = nexaResponse.AccessToken,
-                    RefreshToken = nexaResponse.RefreshToken,
-                    ExpiresAt = nexaResponse.ExpiresAt
-                },
-                RequiresOrgSetup = nexaResponse.RequiresOrgSetup,
-                User = nexaResponse.User,
-                Organization = nexaResponse.Organization,
-                Features = nexaResponse.Features
-            };
-
-            return Ok(response);
+            return await FinishLoginAsync(nexaResponse);
+        }
+        catch (NexaAuthException ex) when (IsAccountSuspended(ex))
+        {
+            _logger.LogWarning("Magic link login blocked because the Nexa account is suspended");
+            return AccountSuspended();
         }
         catch (NexaAuthException ex)
         {
@@ -217,6 +189,69 @@ public class AuthController : ControllerBase
         };
 
         return Ok(response);
+    }
+
+    /// <summary>
+    /// Organizations the signed-in user can switch to.
+    /// </summary>
+    [HttpGet("auth/organizations")]
+    [Authorize]
+    public async Task<ActionResult<List<LoginOrganizationOptionDto>>> ListMyOrganizations()
+    {
+        var userId = User.FindFirst("nexa_user_id")?.Value;
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized(new { message = "Invalid token claims" });
+
+        var nexaToken = await _nexaTokens.GetValidAccessTokenAsync(userId);
+        if (string.IsNullOrWhiteSpace(nexaToken))
+            return Unauthorized(new { message = "Nexa session expired" });
+
+        var organizations = await _nexaClient.ListMyOrganizationsAsync(nexaToken);
+        return Ok(organizations
+            .Select(org => new LoginOrganizationOptionDto
+            {
+                Id = org.OrganizationId!,
+                Name = string.IsNullOrWhiteSpace(org.Name) ? org.OrganizationId! : org.Name,
+                Status = org.Status
+            })
+            .ToList());
+    }
+
+    /// <summary>
+    /// Switch the signed-in user to another organization.
+    /// </summary>
+    [HttpPost("auth/switch-organization")]
+    [Authorize]
+    public async Task<ActionResult<ExchangeTokenResponseDto>> SwitchOrganization([FromBody] SwitchOrganizationRequestDto request)
+    {
+        if (!Guid.TryParse(request.OrganizationId, out var organizationId) || organizationId == Guid.Empty)
+            return BadRequest(new { message = "Organization is required" });
+
+        var userId = User.FindFirst("nexa_user_id")?.Value;
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized(new { message = "Invalid token claims" });
+
+        var nexaToken = await _nexaTokens.GetValidAccessTokenAsync(userId);
+        if (string.IsNullOrWhiteSpace(nexaToken))
+            return Unauthorized(new { message = "Nexa session expired" });
+
+        try
+        {
+            var nexaResponse = await _nexaClient.SelectOrganizationAsync(organizationId, nexaToken);
+            if (nexaResponse.User == null || string.IsNullOrEmpty(nexaResponse.User.UserId) || string.IsNullOrEmpty(nexaResponse.User.Email))
+                return StatusCode(500, new { message = "Invalid Nexa response format" });
+
+            return await FinishLoginAsync(nexaResponse);
+        }
+        catch (NexaAuthException ex) when (IsAccountSuspended(ex))
+        {
+            return AccountSuspended();
+        }
+        catch (NexaAuthException ex)
+        {
+            _logger.LogWarning(ex, "Organization switch failed with {StatusCode}: {ErrorMessage}", ex.StatusCode, ex.ErrorMessage);
+            return StatusCode(ex.StatusCode == 404 ? 404 : 401, new { message = "Unable to use that organization" });
+        }
     }
 
     /// <summary>
@@ -305,41 +340,12 @@ public class AuthController : ControllerBase
                 return StatusCode(500, new { message = "Invalid Nexa response format" });
             }
 
-            // Generate NextHire JWT (this is what FE must send to protected NextHire endpoints)
-            var nextHireAccessToken = _jwtTokenService.GenerateToken(
-                nexaResponse.User.UserId,
-                nexaResponse.User.Email,
-                nexaResponse.RequiresOrgSetup,
-                nexaResponse.Organization?.GetOrgId()
-            );
-
-            // Store Nexa tokens for later proxy calls (password/set, initialize, onboarding)
-            _logger.LogInformation(
-                "Storing Nexa tokens for user {UserId} after successful password login. ExpiresAt: {ExpiresAt}",
-                nexaResponse.User.UserId, nexaResponse.ExpiresAt);
-
-            await _nexaTokens.PersistTokensAsync(
-                nexaResponse.User.UserId,
-                nexaResponse.AccessToken,
-                nexaResponse.RefreshToken,
-                nexaResponse.ExpiresAt);
-
-            var response = new ExchangeTokenResponseDto
-            {
-                AccessToken = nextHireAccessToken,
-                Nexa = new NexaTokensDto
-                {
-                    AccessToken = nexaResponse.AccessToken,
-                    RefreshToken = nexaResponse.RefreshToken,
-                    ExpiresAt = nexaResponse.ExpiresAt
-                },
-                RequiresOrgSetup = nexaResponse.RequiresOrgSetup,
-                User = nexaResponse.User,
-                Organization = nexaResponse.Organization,
-                Features = nexaResponse.Features
-            };
-
-            return Ok(response);
+            return await FinishLoginAsync(nexaResponse);
+        }
+        catch (NexaAuthException ex) when (IsAccountSuspended(ex))
+        {
+            _logger.LogWarning("Password login blocked because the Nexa account is suspended");
+            return AccountSuspended();
         }
         catch (NexaAuthException ex)
         {
@@ -354,6 +360,42 @@ public class AuthController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error during password login");
+            return StatusCode(500, new { message = "An error occurred during login" });
+        }
+    }
+
+    /// <summary>
+    /// Finish login after the user chooses one of several organizations.
+    /// </summary>
+    [HttpPost("auth/select-organization")]
+    [AllowAnonymous]
+    public async Task<ActionResult<ExchangeTokenResponseDto>> SelectOrganization([FromBody] SelectOrganizationRequestDto request)
+    {
+        if (string.IsNullOrWhiteSpace(request.SelectionToken))
+            return BadRequest(new { message = "Selection token is required" });
+        if (!Guid.TryParse(request.OrganizationId, out var organizationId) || organizationId == Guid.Empty)
+            return BadRequest(new { message = "Organization is required" });
+
+        try
+        {
+            var nexaResponse = await _nexaClient.SelectOrganizationAsync(organizationId, request.SelectionToken);
+            if (nexaResponse.User == null || string.IsNullOrEmpty(nexaResponse.User.UserId) || string.IsNullOrEmpty(nexaResponse.User.Email))
+                return StatusCode(500, new { message = "Invalid Nexa response format" });
+
+            return await FinishLoginAsync(nexaResponse);
+        }
+        catch (NexaAuthException ex) when (IsAccountSuspended(ex))
+        {
+            return AccountSuspended();
+        }
+        catch (NexaAuthException ex)
+        {
+            _logger.LogWarning(ex, "Organization selection failed with {StatusCode}: {ErrorMessage}", ex.StatusCode, ex.ErrorMessage);
+            return StatusCode(ex.StatusCode == 404 ? 404 : 401, new { message = "Unable to use that organization" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error selecting organization");
             return StatusCode(500, new { message = "An error occurred during login" });
         }
     }
@@ -577,6 +619,93 @@ public class AuthController : ControllerBase
         if (token.Contains(' ') && !token.Contains('+'))
             token = token.Replace(' ', '+');
         return token;
+    }
+
+    private static bool IsAccountSuspended(NexaAuthException ex) =>
+        ex.StatusCode == StatusCodes.Status403Forbidden
+        && string.Equals(ex.Code, "account_suspended", StringComparison.OrdinalIgnoreCase);
+
+    private ActionResult<ExchangeTokenResponseDto>? PendingOrganizationSelection(NexaExchangeResponseDto nexaResponse)
+    {
+        var organizations = (nexaResponse.Organizations ?? [])
+            .Where(org => !string.IsNullOrWhiteSpace(org.OrganizationId))
+            .Select(org => new LoginOrganizationOptionDto
+            {
+                Id = org.OrganizationId!,
+                Name = string.IsNullOrWhiteSpace(org.Name) ? org.OrganizationId! : org.Name,
+                Status = org.Status
+            })
+            .ToList();
+
+        if (!nexaResponse.RequiresOrgSelection || organizations.Count < 2)
+            return null;
+
+        return Ok(new ExchangeTokenResponseDto
+        {
+            RequiresOrgSelection = true,
+            SelectionToken = nexaResponse.AccessToken,
+            Organizations = organizations,
+            User = nexaResponse.User,
+            RequiresOrgSetup = false
+        });
+    }
+
+    private async Task<ActionResult<ExchangeTokenResponseDto>> FinishLoginAsync(NexaExchangeResponseDto nexaResponse)
+    {
+        var pending = PendingOrganizationSelection(nexaResponse);
+        if (pending != null)
+            return pending;
+
+        var suspended = await SuspendedOrganizationResultAsync(nexaResponse.Organization);
+        if (suspended != null)
+            return AccountSuspended();
+
+        var accessToken = _jwtTokenService.GenerateToken(
+            nexaResponse.User.UserId,
+            nexaResponse.User.Email,
+            nexaResponse.RequiresOrgSetup,
+            nexaResponse.Organization?.GetOrgId());
+
+        await _nexaTokens.PersistTokensAsync(
+            nexaResponse.User.UserId,
+            nexaResponse.AccessToken,
+            nexaResponse.RefreshToken,
+            nexaResponse.ExpiresAt);
+
+        return Ok(new ExchangeTokenResponseDto
+        {
+            AccessToken = accessToken,
+            Nexa = new NexaTokensDto
+            {
+                AccessToken = nexaResponse.AccessToken,
+                RefreshToken = nexaResponse.RefreshToken,
+                ExpiresAt = nexaResponse.ExpiresAt
+            },
+            RequiresOrgSetup = nexaResponse.RequiresOrgSetup,
+            User = nexaResponse.User,
+            Organization = nexaResponse.Organization,
+            Features = nexaResponse.Features
+        });
+    }
+
+    private ActionResult AccountSuspended() =>
+        StatusCode(StatusCodes.Status403Forbidden, new
+        {
+            message = "This account is suspended. Please contact your administrator.",
+            code = "account_suspended"
+        });
+
+    private async Task<ActionResult?> SuspendedOrganizationResultAsync(NexaOrganizationDto? organization)
+    {
+        if (!Guid.TryParse(organization?.GetOrgId(), out var orgId))
+            return null;
+
+        var status = await _nexaClient.GetOrganizationStatusAsync(orgId);
+        if (!string.Equals(status, "suspended", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        _logger.LogWarning("Login blocked because organization {OrgId} is suspended", orgId);
+        return AccountSuspended();
     }
 }
 

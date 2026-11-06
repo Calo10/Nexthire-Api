@@ -19,6 +19,7 @@ public class PublicJobsController : ControllerBase
     private readonly IResumeDocumentsUploader _resumeDocumentsUploader;
     private readonly IJobBotQuestionService _jobBotQuestions;
     private readonly ISourcingService _sourcing;
+    private readonly INexaClient _nexaClient;
     private readonly ILogger<PublicJobsController> _logger;
 
     public PublicJobsController(
@@ -26,12 +27,14 @@ public class PublicJobsController : ControllerBase
         IResumeDocumentsUploader resumeDocumentsUploader,
         IJobBotQuestionService jobBotQuestions,
         ISourcingService sourcing,
+        INexaClient nexaClient,
         ILogger<PublicJobsController> logger)
     {
         _jobService = jobService;
         _resumeDocumentsUploader = resumeDocumentsUploader;
         _jobBotQuestions = jobBotQuestions;
         _sourcing = sourcing;
+        _nexaClient = nexaClient;
         _logger = logger;
     }
 
@@ -47,6 +50,10 @@ public class PublicJobsController : ControllerBase
         {
             if (orgId == Guid.Empty)
                 return BadRequest(new { message = "orgId is required" });
+
+            var suspended = await SuspendedAccountResultAsync(orgId);
+            if (suspended != null)
+                return suspended;
 
             var jobs = await _jobService.GetPublicOpenJobsAsync(orgId);
             return Ok(jobs);
@@ -71,6 +78,10 @@ public class PublicJobsController : ControllerBase
         {
             if (orgId == Guid.Empty)
                 return BadRequest(new { message = "orgId is required" });
+
+            var suspended = await SuspendedAccountResultAsync(orgId);
+            if (suspended != null)
+                return suspended;
 
             var job = await _jobService.GetPublicOpenJobByIdAsync(orgId, id);
             if (job is null)
@@ -106,6 +117,10 @@ public class PublicJobsController : ControllerBase
                 return BadRequest(new { message = "orgId is required" });
             if (jobId == Guid.Empty)
                 return BadRequest(new { message = "jobId is required" });
+
+            var suspended = await SuspendedAccountResultAsync(orgId);
+            if (suspended != null)
+                return suspended;
 
             var (form, parseError) = PublicJobApplyFormParser.Parse(Request.Form, Request.Form.Files);
             if (parseError is not null)
@@ -190,5 +205,19 @@ public class PublicJobsController : ControllerBase
             _logger.LogError(ex, "Error applying to job {JobId} for org {OrgId}", jobId, orgId);
             return StatusCode(500, new { message = "An error occurred while applying to the job" });
         }
+    }
+
+    private async Task<ActionResult?> SuspendedAccountResultAsync(Guid orgId)
+    {
+        var status = await _nexaClient.GetOrganizationStatusAsync(orgId);
+        if (!string.Equals(status, "suspended", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        _logger.LogInformation("Public jobs blocked because organization {OrgId} is suspended", orgId);
+        return StatusCode(StatusCodes.Status403Forbidden, new
+        {
+            message = "This account is suspended. Please contact the administrator.",
+            code = "account_suspended"
+        });
     }
 }

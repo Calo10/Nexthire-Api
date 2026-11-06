@@ -17,6 +17,15 @@ public interface ICandidateRepository
         string sort,
         string dir);
 
+    Task<bool> MatchesListFiltersAsync(
+        Guid orgId,
+        Guid candidateId,
+        string? search,
+        string? source,
+        DateTimeOffset? from,
+        DateTimeOffset? to,
+        IReadOnlyCollection<Guid>? tagIds);
+
     Task<CandidateDto?> GetByIdAsync(Guid orgId, Guid id);
     Task<CandidateDto?> GetByEmailAsync(Guid orgId, string emailLower);
 

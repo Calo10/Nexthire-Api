@@ -12,4 +12,5 @@ public interface IRoleRepository
     Task<bool> UserRoleExistsAsync(Guid orgId, Guid userId, Guid roleId);
     Task<UserRoleDto?> InsertUserRoleAsync(Guid orgId, Guid userId, Guid roleId);
     Task<bool> DeleteUserRoleAsync(Guid orgId, Guid userId, Guid roleId);
+    Task<IReadOnlyList<string>> ListRoleCodesByNexaUserAsync(Guid orgId, Guid nexaUserId);
 }
