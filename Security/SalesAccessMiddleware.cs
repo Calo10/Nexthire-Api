@@ -16,7 +16,8 @@ public class SalesAccessMiddleware
         "/api/applications",
         "/api/pipeline",
         "/api/documents",
-        "/api/notes"
+        "/api/notes",
+        "/api/ai-agents"
     ];
 
     private static readonly string[] ReadExact =

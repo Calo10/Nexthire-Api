@@ -1,16 +1,22 @@
 using nexthire_api.DTOs;
 using nexthire_api.Repositories;
+using nexthire_api.WorkflowAutomation;
 
 namespace nexthire_api.Services;
 
 public class CandidateService : ICandidateService
 {
     private readonly ICandidateRepository _repo;
+    private readonly IWorkflowTriggerService _workflowTriggers;
     private readonly ILogger<CandidateService> _logger;
 
-    public CandidateService(ICandidateRepository repo, ILogger<CandidateService> logger)
+    public CandidateService(
+        ICandidateRepository repo,
+        IWorkflowTriggerService workflowTriggers,
+        ILogger<CandidateService> logger)
     {
         _repo = repo;
+        _workflowTriggers = workflowTriggers;
         _logger = logger;
     }
 
@@ -38,6 +44,18 @@ public class CandidateService : ICandidateService
         }
 
         var created = await _repo.InsertAsync(orgId, dto, emailLower);
+        if (created is not null)
+        {
+            await CandidateWorkflowDispatch.TryAsync(
+                _workflowTriggers,
+                _logger,
+                orgId,
+                CandidateWorkflowVariables.CandidateCreatedTrigger,
+                CandidateWorkflowVariables.CandidateEntityType,
+                created.Id.ToString("D"),
+                CandidateWorkflowVariables.FromCandidate(created));
+        }
+
         return (created, false);
     }
 

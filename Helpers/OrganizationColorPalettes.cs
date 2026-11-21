@@ -90,7 +90,7 @@ public static class OrganizationColorPalettes
         new(
             OrganizationColorPaletteCodes.WarmNeutral,
             "Warm Neutral",
-            "Hospitalidad premium estilo NCA: página clara, footer navy oscuro y mint.",
+            "Estilo limpio y profesional: página clara, footer navy oscuro y acentos mint.",
             Tokens(
                 primary: "#00D9A3",
                 primaryForeground: "#FFFFFF",
