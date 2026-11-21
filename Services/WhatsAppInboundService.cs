@@ -9,6 +9,7 @@ using nexthire_api.Helpers;
 using nexthire_api.Repositories;
 using nexthire_api.Options;
 using nexthire_api.Services.Sourcing;
+using nexthire_api.WorkflowAutomation;
 using OpenAI.Chat;
 
 namespace nexthire_api.Services;
@@ -35,6 +36,7 @@ public class WhatsAppInboundService : IWhatsAppInboundService
     private readonly INexaClient _nexaClient;
     private readonly INexaAccessTokenResolver _nexaAccessTokens;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IWorkflowInboundResumeService _workflowInbound;
     private readonly ILogger<WhatsAppInboundService> _logger;
 
     public WhatsAppInboundService(
@@ -52,6 +54,7 @@ public class WhatsAppInboundService : IWhatsAppInboundService
         INexaClient nexaClient,
         INexaAccessTokenResolver nexaAccessTokens,
         IHttpClientFactory httpClientFactory,
+        IWorkflowInboundResumeService workflowInbound,
         ILogger<WhatsAppInboundService> logger)
     {
         _repository = repository;
@@ -68,6 +71,7 @@ public class WhatsAppInboundService : IWhatsAppInboundService
         _nexaClient = nexaClient;
         _nexaAccessTokens = nexaAccessTokens;
         _httpClientFactory = httpClientFactory;
+        _workflowInbound = workflowInbound;
         _logger = logger;
     }
 
@@ -105,6 +109,16 @@ public class WhatsAppInboundService : IWhatsAppInboundService
                 inbound.TenantId,
                 inbound.ProviderMessageId);
             return;
+        }
+
+        if (Guid.TryParse(inbound.TenantId, out var workflowOrgId) && workflowOrgId != Guid.Empty)
+        {
+            await _workflowInbound.TryResumeWhatsAppAsync(
+                workflowOrgId,
+                normalizedPhoneNumber,
+                inbound.Body,
+                inbound.ProviderMessageId,
+                cancellationToken);
         }
 
         var context = saveResult.Context;

@@ -9,6 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Include="sql\008-workflow-automation-schema.sql" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Remove="tests/**" />
     <Content Remove="tests/**" />
     <None Remove="tests/**" />
@@ -24,6 +28,8 @@
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.2.1" />
     <PackageReference Include="Dapper" Version="2.1.35" />
     <PackageReference Include="System.Data.SqlClient" Version="4.8.6" />
+    <PackageReference Include="Nexa.WorkflowAutomation" Version="0.1.1864" />
+    <PackageReference Include="Nexa.WorkflowAutomation.DependencyInjection" Version="0.1.1864" />
   </ItemGroup>
 
 </Project>

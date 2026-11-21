@@ -10,6 +10,22 @@ using nexthire_api.Repositories.Sourcing;
 using nexthire_api.Services;
 using nexthire_api.Services.Sourcing;
 using nexthire_api.Swagger;
+using nexthire_api.WorkflowAutomation;
+using nexthire_api.WorkflowAutomation.Conversations;
+using nexthire_api.WorkflowAutomation.Documents;
+using nexthire_api.WorkflowAutomation.Providers;
+using nexthire_api.WorkflowAutomation.Repositories;
+using Nexa.WorkflowAutomation.Contracts.Events;
+using Nexa.WorkflowAutomation.Contracts.Persistence;
+using Nexa.WorkflowAutomation.DependencyInjection;
+using Nexa.WorkflowAutomation.Enums;
+using WorkflowProviderEmail = Nexa.WorkflowAutomation.Contracts.Providers.IEmailService;
+using WorkflowProviderDocument = Nexa.WorkflowAutomation.Contracts.Providers.IDocumentService;
+using WorkflowProviderSignature = Nexa.WorkflowAutomation.Contracts.Providers.ISignatureService;
+using WorkflowProviderCalendar = Nexa.WorkflowAutomation.Contracts.Providers.ICalendarService;
+using WorkflowProviderWhatsApp = Nexa.WorkflowAutomation.Contracts.Providers.IWhatsAppService;
+using WorkflowProviderCall = Nexa.WorkflowAutomation.Contracts.Providers.ICallService;
+using WorkflowProviderAI = Nexa.WorkflowAutomation.Contracts.Providers.IAIService;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -204,6 +220,7 @@ builder.Services.AddScoped<INexaAccessTokenResolver, NexaAccessTokenResolver>();
 builder.Services.AddScoped<IJobService, JobService>();
 builder.Services.AddScoped<IJobBotQuestionService, JobBotQuestionService>();
 builder.Services.AddScoped<ICandidateService, CandidateService>();
+builder.Services.AddScoped<IAiAgentService, AiAgentService>();
 builder.Services.AddScoped<IRoleService, RoleService>();
 builder.Services.AddScoped<ITeamService, TeamService>();
 builder.Services.AddScoped<IApplicationsService, ApplicationsService>();
@@ -224,6 +241,10 @@ builder.Services.AddScoped<IJobBotQuestionRepository, JobBotQuestionRepository>(
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<ICandidateRepository, CandidateRepository>();
 builder.Services.AddScoped<IPublicCandidateLinkRepository, PublicCandidateLinkRepository>();
+builder.Services.AddScoped<IOrgAgentRepository, OrgAgentRepository>();
+builder.Services.AddScoped<IAgentChatRepository, AgentChatRepository>();
+builder.Services.AddScoped<ITokenUsageRepository, TokenUsageRepository>();
+builder.Services.AddHostedService<AriaScheduleHostedService>();
 builder.Services.AddScoped<IRoleRepository, RoleRepository>();
 builder.Services.AddScoped<ITeamRepository, TeamRepository>();
 builder.Services.AddScoped<INexaTokenRepository, NexaTokenRepository>();
@@ -297,6 +318,54 @@ builder.Services.AddScoped<IWhatsAppMessengerRouteSyncService, WhatsAppMessenger
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddSingleton<INexaTokenStore, NexaTokenStore>();
 builder.Services.AddSingleton<IAuthLinkTokenStore, AuthLinkTokenStore>();
+
+builder.Services.AddScoped<SqlWorkflowDefinitionRepository>();
+builder.Services.AddScoped<IWorkflowDefinitionRepository>(sp =>
+    sp.GetRequiredService<SqlWorkflowDefinitionRepository>());
+builder.Services.AddScoped<SqlWorkflowExecutionRepository>();
+builder.Services.AddScoped<IWorkflowExecutionRepository>(sp =>
+    sp.GetRequiredService<SqlWorkflowExecutionRepository>());
+builder.Services.AddScoped<SqlWorkflowStepExecutionRepository>();
+builder.Services.AddScoped<IWorkflowStepExecutionRepository>(sp =>
+    sp.GetRequiredService<SqlWorkflowStepExecutionRepository>());
+builder.Services.AddScoped<SqlWorkflowHistoryRepository>();
+builder.Services.AddScoped<IWorkflowHistoryRepository>(sp =>
+    sp.GetRequiredService<SqlWorkflowHistoryRepository>());
+builder.Services.AddScoped<SqlWorkflowEventReceiptRepository>();
+builder.Services.AddScoped<IWorkflowEventReceiptRepository>(sp =>
+    sp.GetRequiredService<SqlWorkflowEventReceiptRepository>());
+builder.Services.AddScoped<SqlWorkflowUnitOfWork>();
+builder.Services.AddScoped<IWorkflowUnitOfWork>(sp =>
+    sp.GetRequiredService<SqlWorkflowUnitOfWork>());
+builder.Services.AddScoped<IWorkflowSqlSession>(sp =>
+    sp.GetRequiredService<SqlWorkflowUnitOfWork>());
+builder.Services.AddScoped<INexaDocumentsClient, NexaDocumentsClient>();
+builder.Services.AddScoped<WorkflowProviderEmail, WorkflowEmailService>();
+builder.Services.AddScoped<WorkflowProviderDocument, WorkflowDocumentService>();
+builder.Services.AddScoped<WorkflowProviderSignature, WorkflowSignatureService>();
+builder.Services.AddScoped<WorkflowProviderCalendar, WorkflowScheduleMeetingService>();
+builder.Services.AddScoped<IWhatsAppMessagingService, WhatsAppMessagingService>();
+builder.Services.AddScoped<WorkflowProviderWhatsApp, WorkflowWhatsAppService>();
+builder.Services.AddScoped<WorkflowProviderCall, WorkflowCallService>();
+builder.Services.AddScoped<WorkflowAIService>();
+builder.Services.AddScoped<WorkflowProviderAI>(sp => sp.GetRequiredService<WorkflowAIService>());
+builder.Services.AddScoped<IWorkflowExecutionRetryService, WorkflowExecutionRetryService>();
+builder.Services.AddScoped<IWorkflowTriggerDefinitionLookup>(sp =>
+    sp.GetRequiredService<SqlWorkflowDefinitionRepository>());
+builder.Services.AddScoped<IWorkflowTriggerService, WorkflowTriggerService>();
+builder.Services.AddScoped<IWorkflowDueExecutionLookup>(sp =>
+    sp.GetRequiredService<SqlWorkflowExecutionRepository>());
+builder.Services.AddScoped<WorkflowDelayResumeService>();
+builder.Services.AddHostedService<WorkflowDelayResumeHostedService>();
+builder.Services.AddScoped<IInterviewSessionRepository, SqlInterviewSessionRepository>();
+builder.Services.AddScoped<IConversationInterviewService, ConversationInterviewService>();
+builder.Services.AddScoped<IWorkflowInboundResumeService, WorkflowInboundResumeService>();
+builder.Services.AddNexaWorkflowAutomation(options =>
+{
+    options.RegisterCoreActivities = false;
+    options.MissingVariableBehavior = MissingVariableBehavior.Throw;
+});
+builder.Services.AddNextHireWorkflowActivities();
 
 // CORS: en Development acepta cualquier puerto en loopback (Vite puede usar 5174, [::1], etc.).
 var corsOrigins = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -431,7 +500,9 @@ await Task.WhenAll(
     EnsureNhUsersSchemaAsync(app.Services),
     EnsureNexaUserTokensSchemaAsync(app.Services),
     EnsureCandidateTagsSchemaAsync(app.Services),
-    EnsureListIndexesAsync(app.Services));
+    EnsureAiAgentsSchemaAsync(app.Services),
+    EnsureListIndexesAsync(app.Services),
+    EnsureWorkflowAutomationSchemaAsync(app.Services));
 
 app.Lifetime.ApplicationStarted.Register(() =>
 {
@@ -561,6 +632,26 @@ static async Task EnsureCandidateTagsSchemaAsync(IServiceProvider services)
     }
 }
 
+static async Task EnsureAiAgentsSchemaAsync(IServiceProvider services)
+{
+    using var scope = services.CreateScope();
+    var repo = scope.ServiceProvider.GetRequiredService<IOrgAgentRepository>();
+    var chat = scope.ServiceProvider.GetRequiredService<IAgentChatRepository>();
+    var usage = scope.ServiceProvider.GetRequiredService<ITokenUsageRepository>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        await repo.EnsureSchemaAsync();
+        await chat.EnsureSchemaAsync();
+        await usage.EnsureSchemaAsync();
+        logger.LogInformation("NextHire AI agent tables are ready.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to ensure NextHire AI agent schema.");
+    }
+}
+
 static async Task EnsureNhUsersSchemaAsync(IServiceProvider services)
 {
     using var scope = services.CreateScope();
@@ -608,6 +699,24 @@ static async Task EnsureMarketingMetaInsightsSnapshotsSchemaAsync(IServiceProvid
     catch (Exception ex)
     {
         logger.LogError(ex, "Failed to ensure marketing_meta_insights_snapshots schema.");
+    }
+}
+
+static async Task EnsureWorkflowAutomationSchemaAsync(IServiceProvider services)
+{
+    await using var scope = services.CreateAsyncScope();
+    var repo = scope.ServiceProvider.GetRequiredService<SqlWorkflowDefinitionRepository>();
+    var interviews = scope.ServiceProvider.GetRequiredService<IInterviewSessionRepository>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        await repo.EnsureSchemaAsync();
+        await interviews.EnsureSchemaAsync();
+        logger.LogInformation("NextHire workflow automation tables are ready.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to ensure workflow automation schema.");
     }
 }
 

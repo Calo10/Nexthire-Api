@@ -1,5 +1,6 @@
 using nexthire_api.DTOs;
 using nexthire_api.Repositories;
+using nexthire_api.WorkflowAutomation;
 
 namespace nexthire_api.Services;
 
@@ -7,15 +8,21 @@ public class ApplicationsService : IApplicationsService
 {
     private readonly IApplicationsRepository _repo;
     private readonly IPipelineRepository _pipelineRepo;
+    private readonly ICandidateRepository _candidates;
+    private readonly IWorkflowTriggerService _workflowTriggers;
     private readonly ILogger<ApplicationsService> _logger;
 
     public ApplicationsService(
         IApplicationsRepository repo,
         IPipelineRepository pipelineRepo,
+        ICandidateRepository candidates,
+        IWorkflowTriggerService workflowTriggers,
         ILogger<ApplicationsService> logger)
     {
         _repo = repo;
         _pipelineRepo = pipelineRepo;
+        _candidates = candidates;
+        _workflowTriggers = workflowTriggers;
         _logger = logger;
     }
 
@@ -64,6 +71,11 @@ public class ApplicationsService : IApplicationsService
         // Initial stage history row
         await _repo.InsertStageHistoryAsync(orgId, created.ApplicationId, fromStageId: null, toStageId: request.CurrentStageId, movedByUserId: currentNhUserId);
 
+        await DispatchApplicationTriggerAsync(
+            orgId,
+            CandidateWorkflowVariables.ApplicationCreatedTrigger,
+            created);
+
         return created;
     }
 
@@ -97,6 +109,15 @@ public class ApplicationsService : IApplicationsService
         var createdCard = await _repo.CreateKanbanAsync(orgId, jobId, candidateId, stageId, statusValue);
         await _repo.InsertStageHistoryAsync(orgId, createdCard.Id, fromStageId: null, toStageId: stageId, movedByUserId: nhUserId);
 
+        var listItem = await _repo.GetByIdAsync(orgId, createdCard.Id);
+        if (listItem is not null)
+        {
+            await DispatchApplicationTriggerAsync(
+                orgId,
+                CandidateWorkflowVariables.ApplicationCreatedTrigger,
+                listItem);
+        }
+
         return createdCard;
     }
 
@@ -112,6 +133,10 @@ public class ApplicationsService : IApplicationsService
         if (request.CurrentStageId.HasValue && prevStage.HasValue && prevStage.Value != request.CurrentStageId.Value)
         {
             await _repo.InsertStageHistoryAsync(orgId, applicationId, fromStageId: prevStage.Value, toStageId: request.CurrentStageId.Value, movedByUserId: currentNhUserId);
+            await DispatchApplicationTriggerAsync(
+                orgId,
+                CandidateWorkflowVariables.ApplicationStageChangedTrigger,
+                updated);
         }
 
         return updated;
@@ -144,6 +169,31 @@ public class ApplicationsService : IApplicationsService
     public Task<bool> DeleteAsync(Guid orgId, Guid applicationId)
     {
         return _repo.DeletePermanentlyAsync(orgId, applicationId);
+    }
+
+    private async Task DispatchApplicationTriggerAsync(
+        Guid orgId,
+        string triggerType,
+        ApplicationListItemDto application)
+    {
+        CandidateDto? candidate = null;
+        try
+        {
+            candidate = await _candidates.GetByIdAsync(orgId, application.CandidateId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Could not hydrate candidate for workflow trigger {Trigger}", triggerType);
+        }
+
+        await CandidateWorkflowDispatch.TryAsync(
+            _workflowTriggers,
+            _logger,
+            orgId,
+            triggerType,
+            CandidateWorkflowVariables.ApplicationEntityType,
+            application.ApplicationId.ToString("D"),
+            CandidateWorkflowVariables.FromApplication(application, candidate));
     }
 }
 
