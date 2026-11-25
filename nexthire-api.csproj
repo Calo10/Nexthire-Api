@@ -9,6 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Include="sql\008-workflow-automation-schema.sql" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Remove="tests/**" />
     <Content Remove="tests/**" />
     <None Remove="tests/**" />
@@ -26,5 +30,24 @@
     <PackageReference Include="System.Data.SqlClient" Version="4.8.6" />
   </ItemGroup>
 
-</Project>
+  <!--
+    Vendored Nexa.WorkflowAutomation 0.1.1864 (private Azure Artifacts feed).
+    CI agents only have nuget.org; keep these as file references so restore does not
+    require CreativeOneSolutions/Nexa feed authentication.
+  -->
+  <ItemGroup>
+    <Reference Include="Nexa.WorkflowAutomation">
+      <HintPath>lib\Nexa.WorkflowAutomation\Nexa.WorkflowAutomation.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Nexa.WorkflowAutomation.DependencyInjection">
+      <HintPath>lib\Nexa.WorkflowAutomation\Nexa.WorkflowAutomation.DependencyInjection.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
 
+  <ItemGroup>
+    <None Include="lib\Nexa.WorkflowAutomation\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

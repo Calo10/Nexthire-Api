@@ -1,0 +1,70 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Nexa.WorkflowAutomation.DependencyInjection</name>
+    </assembly>
+    <members>
+        <member name="T:Nexa.WorkflowAutomation.DependencyInjection.NexaWorkflowAutomationOptions">
+            <summary>
+            Configuration options for Nexa workflow automation registration.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.DependencyInjection.NexaWorkflowAutomationOptions.RegisterCoreActivities">
+            <summary>
+            Gets or sets a value indicating whether core activities should be registered.
+            Defaults to <c>true</c>.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.DependencyInjection.NexaWorkflowAutomationOptions.MissingVariableBehavior">
+            <summary>
+            Gets or sets the missing variable behavior used by template rendering.
+            Defaults to <see cref="F:Nexa.WorkflowAutomation.Enums.MissingVariableBehavior.Throw"/>.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.DependencyInjection.NexaWorkflowAutomationOptions.AdditionalActivityTypes">
+            <summary>
+            Gets the additional activity types to register.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.DependencyInjection.NexaWorkflowAutomationOptions.AddActivity``1">
+            <summary>
+            Adds a custom activity type for registration.
+            </summary>
+            <typeparam name="TActivity">Activity type.</typeparam>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.DependencyInjection.NexaWorkflowAutomationOptions.AddActivity(System.Type)">
+            <summary>
+            Adds a custom activity type for registration.
+            </summary>
+            <param name="activityType">Activity CLR type.</param>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.DependencyInjection.ServiceCollectionExtensions">
+            <summary>
+            Dependency injection extensions for Nexa.WorkflowAutomation.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.DependencyInjection.ServiceCollectionExtensions.AddNexaWorkflowAutomation(Microsoft.Extensions.DependencyInjection.IServiceCollection)">
+            <summary>
+            Adds Nexa workflow automation services to the service collection.
+            </summary>
+            <param name="services">Service collection.</param>
+            <returns>The same service collection.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.DependencyInjection.ServiceCollectionExtensions.AddNexaWorkflowAutomation(Microsoft.Extensions.DependencyInjection.IServiceCollection,System.Action{Nexa.WorkflowAutomation.DependencyInjection.NexaWorkflowAutomationOptions})">
+            <summary>
+            Adds Nexa workflow automation services to the service collection.
+            </summary>
+            <param name="services">Service collection.</param>
+            <param name="configure">Options configuration.</param>
+            <returns>The same service collection.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.DependencyInjection.ServiceCollectionExtensions.AddWorkflowActivity``1(Microsoft.Extensions.DependencyInjection.IServiceCollection)">
+            <summary>
+            Registers a product-specific workflow activity.
+            </summary>
+            <typeparam name="TActivity">Activity type.</typeparam>
+            <param name="services">Service collection.</param>
+            <returns>The same service collection.</returns>
+        </member>
+    </members>
+</doc>
