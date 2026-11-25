@@ -40,12 +40,26 @@ public class ResumeDocumentsUploader : IResumeDocumentsUploader
     }
 
     /// <inheritdoc />
-    public async Task<string> UploadResumeAsync(
+    public Task<string> UploadResumeAsync(
         Guid orgId,
         Stream content,
         string fileName,
         string? contentType,
         long length,
+        CancellationToken cancellationToken = default) =>
+        UploadDocumentAsync(orgId, content, fileName, contentType, length, ResumeExtensions, cancellationToken);
+
+    private static readonly HashSet<string> ResumeExtensions =
+        new(StringComparer.OrdinalIgnoreCase) { ".pdf", ".doc", ".docx" };
+
+    /// <inheritdoc />
+    public async Task<string> UploadDocumentAsync(
+        Guid orgId,
+        Stream content,
+        string fileName,
+        string? contentType,
+        long length,
+        IReadOnlySet<string> allowedExtensions,
         CancellationToken cancellationToken = default)
     {
         if (content is null || !content.CanRead)
@@ -62,9 +76,12 @@ public class ResumeDocumentsUploader : IResumeDocumentsUploader
         if (string.IsNullOrWhiteSpace(ext))
             ext = ExtensionFromContentType(contentType ?? string.Empty) ?? string.Empty;
 
-        var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".pdf", ".doc", ".docx" };
-        if (string.IsNullOrWhiteSpace(ext) || !allowed.Contains(ext))
-            throw new InvalidOperationException("resume file type not allowed (pdf, doc, docx)");
+        if (string.IsNullOrWhiteSpace(ext) || !allowedExtensions.Contains(ext))
+        {
+            throw new InvalidOperationException(ReferenceEquals(allowedExtensions, ResumeExtensions)
+                ? "resume file type not allowed (pdf, doc, docx)"
+                : $"file type not allowed ({string.Join(", ", allowedExtensions.Select(e => e.TrimStart('.')))})");
+        }
 
         var baseUrl = ResolveDocumentsBaseUrl(_configuration);
         if (string.IsNullOrWhiteSpace(baseUrl))

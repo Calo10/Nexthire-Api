@@ -222,6 +222,15 @@ builder.Services.AddScoped<IJobBotQuestionService, JobBotQuestionService>();
 builder.Services.AddScoped<ICandidateService, CandidateService>();
 builder.Services.AddScoped<IAiAgentService, AiAgentService>();
 builder.Services.AddScoped<IRoleService, RoleService>();
+builder.Services.AddScoped<IEmployeeService, EmployeeService>();
+builder.Services.AddScoped<IHrDocumentService, HrDocumentService>();
+builder.Services.AddScoped<IOrganizationService, OrganizationService>();
+builder.Services.AddScoped<IHrReportsService, HrReportsService>();
+builder.Services.AddHostedService<ReportScheduleHostedService>();
+builder.Services.AddScoped<IOnboardingService, OnboardingService>();
+builder.Services.AddScoped<IOffboardingService, OffboardingService>();
+builder.Services.AddSingleton<IOnboardingNotificationService, OnboardingNotificationService>();
+builder.Services.AddSingleton<IOffboardingNotificationService, OffboardingNotificationService>();
 builder.Services.AddScoped<ITeamService, TeamService>();
 builder.Services.AddScoped<IApplicationsService, ApplicationsService>();
 builder.Services.AddScoped<IDocumentService, DocumentService>();
@@ -240,6 +249,12 @@ builder.Services.AddScoped<IJobRepository, JobRepository>();
 builder.Services.AddScoped<IJobBotQuestionRepository, JobBotQuestionRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<ICandidateRepository, CandidateRepository>();
+builder.Services.AddScoped<IEmployeeRepository, EmployeeRepository>();
+builder.Services.AddScoped<IHrDocumentRepository, HrDocumentRepository>();
+builder.Services.AddScoped<IOrganizationRepository, OrganizationRepository>();
+builder.Services.AddScoped<IHrReportsRepository, HrReportsRepository>();
+builder.Services.AddScoped<IOnboardingRepository, OnboardingRepository>();
+builder.Services.AddScoped<IOffboardingRepository, OffboardingRepository>();
 builder.Services.AddScoped<IPublicCandidateLinkRepository, PublicCandidateLinkRepository>();
 builder.Services.AddScoped<IOrgAgentRepository, OrgAgentRepository>();
 builder.Services.AddScoped<IAgentChatRepository, AgentChatRepository>();
@@ -491,6 +506,10 @@ app.UseAuthorization();
 app.UseMiddleware<SalesAccessMiddleware>();
 app.MapControllers();
 
+// Onboarding and offboarding tables reference the employee tables, so their schema steps wait for the employees step
+// (offboarding has no dependency on the onboarding tables, so the two run in parallel).
+var coreHrEmployeesSchema = EnsureCoreHrEmployeesSchemaAsync(app.Services);
+
 await Task.WhenAll(
     EnsureMarketingMetaCampaignsSchemaAsync(app.Services),
     EnsureMarketingMetaInsightsSnapshotsSchemaAsync(app.Services),
@@ -502,7 +521,13 @@ await Task.WhenAll(
     EnsureCandidateTagsSchemaAsync(app.Services),
     EnsureAiAgentsSchemaAsync(app.Services),
     EnsureListIndexesAsync(app.Services),
-    EnsureWorkflowAutomationSchemaAsync(app.Services));
+    EnsureWorkflowAutomationSchemaAsync(app.Services),
+    coreHrEmployeesSchema,
+    EnsureCoreHrOnboardingSchemaAsync(app.Services, coreHrEmployeesSchema),
+    EnsureCoreHrOffboardingSchemaAsync(app.Services, coreHrEmployeesSchema),
+    EnsureCoreHrDocumentsHubSchemaAsync(app.Services, coreHrEmployeesSchema),
+    EnsureCoreHrOrganizationSchemaAsync(app.Services, coreHrEmployeesSchema),
+    EnsureCoreHrReportsSchemaAsync(app.Services, coreHrEmployeesSchema));
 
 app.Lifetime.ApplicationStarted.Register(() =>
 {
@@ -720,3 +745,108 @@ static async Task EnsureWorkflowAutomationSchemaAsync(IServiceProvider services)
     }
 }
 
+static async Task EnsureCoreHrEmployeesSchemaAsync(IServiceProvider services)
+{
+    await using var scope = services.CreateAsyncScope();
+    var repo = scope.ServiceProvider.GetRequiredService<IEmployeeRepository>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        await repo.EnsureSchemaAsync();
+        logger.LogInformation("NextHire Core HR employee tables are ready.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to ensure Core HR employees schema.");
+    }
+}
+
+static async Task EnsureCoreHrDocumentsHubSchemaAsync(IServiceProvider services, Task employeesSchemaReady)
+{
+    await employeesSchemaReady;
+
+    await using var scope = services.CreateAsyncScope();
+    var repo = scope.ServiceProvider.GetRequiredService<IHrDocumentRepository>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        await repo.EnsureSchemaAsync();
+        logger.LogInformation("NextHire Core HR documents hub schema is ready.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to ensure Core HR documents hub schema.");
+    }
+}
+
+static async Task EnsureCoreHrOrganizationSchemaAsync(IServiceProvider services, Task employeesSchemaReady)
+{
+    await employeesSchemaReady;
+
+    await using var scope = services.CreateAsyncScope();
+    var repo = scope.ServiceProvider.GetRequiredService<IOrganizationRepository>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        await repo.EnsureSchemaAsync();
+        logger.LogInformation("NextHire Core HR organization schema is ready.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to ensure Core HR organization schema.");
+    }
+}
+
+static async Task EnsureCoreHrReportsSchemaAsync(IServiceProvider services, Task employeesSchemaReady)
+{
+    await employeesSchemaReady;
+
+    await using var scope = services.CreateAsyncScope();
+    var repo = scope.ServiceProvider.GetRequiredService<IHrReportsRepository>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        await repo.EnsureSchemaAsync();
+        logger.LogInformation("NextHire Core HR reports schema is ready.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to ensure Core HR reports schema.");
+    }
+}
+
+static async Task EnsureCoreHrOnboardingSchemaAsync(IServiceProvider services, Task employeesSchemaReady)
+{
+    await employeesSchemaReady;
+
+    await using var scope = services.CreateAsyncScope();
+    var repo = scope.ServiceProvider.GetRequiredService<IOnboardingRepository>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        await repo.EnsureSchemaAsync();
+        logger.LogInformation("NextHire Core HR onboarding tables are ready.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to ensure Core HR onboarding schema.");
+    }
+}
+
+static async Task EnsureCoreHrOffboardingSchemaAsync(IServiceProvider services, Task employeesSchemaReady)
+{
+    await employeesSchemaReady;
+
+    await using var scope = services.CreateAsyncScope();
+    var repo = scope.ServiceProvider.GetRequiredService<IOffboardingRepository>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        await repo.EnsureSchemaAsync();
+        logger.LogInformation("NextHire Core HR offboarding tables are ready.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to ensure Core HR offboarding schema.");
+    }
+}
