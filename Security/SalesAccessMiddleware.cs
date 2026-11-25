@@ -5,6 +5,8 @@ namespace nexthire_api.Security;
 /// <summary>
 /// Users whose only NextHire role is Sales may read dashboard, jobs, candidates, and pipeline.
 /// Any other role, or no role, keeps the existing access.
+/// Core HR routes (employees and onboarding) are intentionally NOT in the allowlists below,
+/// so sales-only users are always rejected there.
 /// </summary>
 public class SalesAccessMiddleware
 {

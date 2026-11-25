@@ -10,6 +10,12 @@
 
   <ItemGroup>
     <Content Include="sql\008-workflow-automation-schema.sql" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="sql\009-core-hr-employees-schema.sql" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="sql\010-core-hr-onboarding-schema.sql" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="sql\011-core-hr-offboarding-schema.sql" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="sql\012-core-hr-documents-hub.sql" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="sql\013-core-hr-organization-schema.sql" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="sql\014-core-hr-reports-schema.sql" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
