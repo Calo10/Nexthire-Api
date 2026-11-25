@@ -1,0 +1,2864 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Nexa.WorkflowAutomation</name>
+    </assembly>
+    <members>
+        <member name="T:Nexa.WorkflowAutomation.Activities.AI.AskQuestionsActivity">
+            <summary>
+            Starts a questionnaire session and waits for completion.
+            </summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Activities.AI.AskQuestionsActivity.TypeName">
+            <summary>Activity type key.</summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Activities.AI.AskQuestionsActivity.#ctor(Nexa.WorkflowAutomation.Utilities.IWorkflowVariableResolver)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Activities.AI.AskQuestionsActivity"/> class.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Activities.AI.AskQuestionsActivity.ActivityType">
+            <inheritdoc />
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Activities.AI.AskQuestionsActivity.ExecuteAsync(Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionContext,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Activities.AI.RunAIActivity">
+            <summary>
+            Executes an AI operation through <see cref="T:Nexa.WorkflowAutomation.Contracts.Providers.IAIService"/>.
+            </summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Activities.AI.RunAIActivity.TypeName">
+            <summary>Activity type key.</summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Activities.AI.RunAIActivity.#ctor(Nexa.WorkflowAutomation.Utilities.ITemplateRenderer,Nexa.WorkflowAutomation.Utilities.IWorkflowVariableResolver)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Activities.AI.RunAIActivity"/> class.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Activities.AI.RunAIActivity.ActivityType">
+            <inheritdoc />
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Activities.AI.RunAIActivity.ExecuteAsync(Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionContext,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Activities.Communication.CallActivity">
+            <summary>
+            Creates a call request or triggers a provider call.
+            </summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Activities.Communication.CallActivity.TypeName">
+            <summary>Activity type key.</summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Activities.Communication.CallActivity.#ctor(Nexa.WorkflowAutomation.Utilities.ITemplateRenderer,Nexa.WorkflowAutomation.Utilities.IWorkflowVariableResolver)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Activities.Communication.CallActivity"/> class.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Activities.Communication.CallActivity.ActivityType">
+            <inheritdoc />
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Activities.Communication.CallActivity.ExecuteAsync(Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionContext,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Activities.Communication.SendEmailActivity">
+            <summary>
+            Sends an email through <see cref="T:Nexa.WorkflowAutomation.Contracts.Providers.IEmailService"/>.
+            </summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Activities.Communication.SendEmailActivity.TypeName">
+            <summary>Activity type key.</summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Activities.Communication.SendEmailActivity.#ctor(Nexa.WorkflowAutomation.Utilities.ITemplateRenderer,Nexa.WorkflowAutomation.Utilities.IWorkflowVariableResolver)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Activities.Communication.SendEmailActivity"/> class.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Activities.Communication.SendEmailActivity.ActivityType">
+            <inheritdoc />
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Activities.Communication.SendEmailActivity.ExecuteAsync(Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionContext,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Activities.Communication.SendWhatsAppActivity">
+            <summary>
+            Sends a WhatsApp message through <see cref="T:Nexa.WorkflowAutomation.Contracts.Providers.IWhatsAppService"/>.
+            </summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Activities.Communication.SendWhatsAppActivity.TypeName">
+            <summary>Activity type key.</summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Activities.Communication.SendWhatsAppActivity.#ctor(Nexa.WorkflowAutomation.Utilities.ITemplateRenderer,Nexa.WorkflowAutomation.Utilities.IWorkflowVariableResolver)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Activities.Communication.SendWhatsAppActivity"/> class.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Activities.Communication.SendWhatsAppActivity.ActivityType">
+            <inheritdoc />
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Activities.Communication.SendWhatsAppActivity.ExecuteAsync(Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionContext,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Activities.Documents.SendDocumentActivity">
+            <summary>
+            Sends or exposes a document through <see cref="T:Nexa.WorkflowAutomation.Contracts.Providers.IDocumentService"/>.
+            </summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Activities.Documents.SendDocumentActivity.TypeName">
+            <summary>Activity type key.</summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Activities.Documents.SendDocumentActivity.#ctor(Nexa.WorkflowAutomation.Utilities.ITemplateRenderer,Nexa.WorkflowAutomation.Utilities.IWorkflowVariableResolver)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Activities.Documents.SendDocumentActivity"/> class.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Activities.Documents.SendDocumentActivity.ActivityType">
+            <inheritdoc />
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Activities.Documents.SendDocumentActivity.ExecuteAsync(Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionContext,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Activities.Documents.SendForSignatureActivity">
+            <summary>
+            Sends a document for signature and waits for completion.
+            </summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Activities.Documents.SendForSignatureActivity.TypeName">
+            <summary>Activity type key.</summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Activities.Documents.SendForSignatureActivity.#ctor(Nexa.WorkflowAutomation.Utilities.ITemplateRenderer,Nexa.WorkflowAutomation.Utilities.IWorkflowVariableResolver)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Activities.Documents.SendForSignatureActivity"/> class.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Activities.Documents.SendForSignatureActivity.ActivityType">
+            <inheritdoc />
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Activities.Documents.SendForSignatureActivity.ExecuteAsync(Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionContext,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Activities.Flow.BranchActivity">
+            <summary>
+            Evaluates a variable expression and returns a branch transition.
+            </summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Activities.Flow.BranchActivity.TypeName">
+            <summary>
+            Activity type key.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Activities.Flow.BranchActivity.#ctor(Nexa.WorkflowAutomation.Utilities.IWorkflowVariableResolver)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Activities.Flow.BranchActivity"/> class.
+            </summary>
+            <param name="variableResolver">Variable resolver.</param>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Activities.Flow.BranchActivity.ActivityType">
+            <inheritdoc />
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Activities.Flow.BranchActivity.ExecuteAsync(Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionContext,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Activities.Flow.DelayActivity">
+            <summary>
+            Waits until a future UTC time.
+            </summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Activities.Flow.DelayActivity.TypeName">
+            <summary>
+            Activity type key.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Activities.Flow.DelayActivity.#ctor(Nexa.WorkflowAutomation.Utilities.IWorkflowVariableResolver)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Activities.Flow.DelayActivity"/> class.
+            </summary>
+            <param name="variableResolver">Variable resolver.</param>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Activities.Flow.DelayActivity.ActivityType">
+            <inheritdoc />
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Activities.Flow.DelayActivity.ExecuteAsync(Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionContext,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Activities.Flow.EndActivity">
+            <summary>
+            Completes the workflow.
+            </summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Activities.Flow.EndActivity.TypeName">
+            <summary>
+            Activity type key.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Activities.Flow.EndActivity.ActivityType">
+            <inheritdoc />
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Activities.Flow.EndActivity.ExecuteAsync(Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionContext,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Activities.Flow.SetVariableActivity">
+            <summary>
+            Sets a workflow variable and continues.
+            </summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Activities.Flow.SetVariableActivity.TypeName">
+            <summary>
+            Activity type key.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Activities.Flow.SetVariableActivity.ActivityType">
+            <inheritdoc />
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Activities.Flow.SetVariableActivity.ExecuteAsync(Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionContext,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Activities.Flow.WaitForEventActivity">
+            <summary>
+            Waits for a normalized external workflow event.
+            </summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Activities.Flow.WaitForEventActivity.TypeName">
+            <summary>
+            Activity type key.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Activities.Flow.WaitForEventActivity.#ctor(Nexa.WorkflowAutomation.Utilities.IWorkflowVariableResolver)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Activities.Flow.WaitForEventActivity"/> class.
+            </summary>
+            <param name="variableResolver">Variable resolver.</param>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Activities.Flow.WaitForEventActivity.ActivityType">
+            <inheritdoc />
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Activities.Flow.WaitForEventActivity.ExecuteAsync(Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionContext,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Activities.Meetings.ScheduleMeetingActivity">
+            <summary>
+            Schedules a meeting or creates a scheduling link.
+            </summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Activities.Meetings.ScheduleMeetingActivity.TypeName">
+            <summary>Activity type key.</summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Activities.Meetings.ScheduleMeetingActivity.#ctor(Nexa.WorkflowAutomation.Utilities.ITemplateRenderer,Nexa.WorkflowAutomation.Utilities.IWorkflowVariableResolver)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Activities.Meetings.ScheduleMeetingActivity"/> class.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Activities.Meetings.ScheduleMeetingActivity.ActivityType">
+            <inheritdoc />
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Activities.Meetings.ScheduleMeetingActivity.ExecuteAsync(Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionContext,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Activities.Tasks.CreateTaskActivity">
+            <summary>
+            Creates a task through <see cref="T:Nexa.WorkflowAutomation.Contracts.Providers.ITaskService"/>.
+            </summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Activities.Tasks.CreateTaskActivity.TypeName">
+            <summary>Activity type key.</summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Activities.Tasks.CreateTaskActivity.#ctor(Nexa.WorkflowAutomation.Utilities.ITemplateRenderer,Nexa.WorkflowAutomation.Utilities.IWorkflowVariableResolver)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Activities.Tasks.CreateTaskActivity"/> class.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Activities.Tasks.CreateTaskActivity.ActivityType">
+            <inheritdoc />
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Activities.Tasks.CreateTaskActivity.ExecuteAsync(Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionContext,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionContext">
+            <summary>
+            Runtime context provided to activities during execution.
+            Contains services that must never be persisted on domain models.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionContext.#ctor(Nexa.WorkflowAutomation.Models.Definitions.WorkflowDefinition,Nexa.WorkflowAutomation.Models.Definitions.WorkflowStepDefinition,Nexa.WorkflowAutomation.Models.Executions.WorkflowExecution,Nexa.WorkflowAutomation.Models.Executions.WorkflowStepExecution,Nexa.WorkflowAutomation.Models.Executions.WorkflowExecutionContext,System.IServiceProvider,System.DateTimeOffset)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionContext"/> class.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionContext.Workflow">
+            <summary>
+            Gets the workflow definition.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionContext.Step">
+            <summary>
+            Gets the current step definition.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionContext.Execution">
+            <summary>
+            Gets the workflow execution.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionContext.StepExecution">
+            <summary>
+            Gets the current step execution.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionContext.WorkflowContext">
+            <summary>
+            Gets the persisted workflow execution context.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionContext.Services">
+            <summary>
+            Gets the runtime service provider.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionContext.UtcNow">
+            <summary>
+            Gets the current UTC timestamp.
+            </summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionResult">
+            <summary>
+            Result returned by an activity after execution.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionResult.Outcome">
+            <summary>
+            Gets the activity outcome.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionResult.TransitionKey">
+            <summary>
+            Gets the branch transition key when <see cref="P:Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionResult.Outcome"/> is <see cref="F:Nexa.WorkflowAutomation.Enums.ActivityExecutionOutcome.Branch"/>.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionResult.WaitingEventType">
+            <summary>
+            Gets the waiting event type when waiting for an event.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionResult.CorrelationId">
+            <summary>
+            Gets the correlation identifier used for event matching.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionResult.ResumeAt">
+            <summary>
+            Gets the UTC resume timestamp for delayed waits or event timeouts.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionResult.Output">
+            <summary>
+            Gets optional activity output.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionResult.Variables">
+            <summary>
+            Gets variables to merge into the execution context.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionResult.ErrorCode">
+            <summary>
+            Gets an optional error code.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionResult.ErrorMessage">
+            <summary>
+            Gets an optional error message.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionResult.Completed(System.Nullable{System.Text.Json.JsonElement},System.Collections.Generic.IReadOnlyDictionary{System.String,System.Text.Json.JsonElement})">
+            <summary>
+            Creates a completed result.
+            </summary>
+            <param name="output">Optional output.</param>
+            <param name="variables">Optional variables.</param>
+            <returns>Completed result.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionResult.WaitForEvent(System.String,System.String,System.Nullable{System.DateTimeOffset},System.Nullable{System.Text.Json.JsonElement},System.Collections.Generic.IReadOnlyDictionary{System.String,System.Text.Json.JsonElement})">
+            <summary>
+            Creates a waiting-for-event result.
+            </summary>
+            <param name="waitingEventType">Required event type.</param>
+            <param name="correlationId">Optional correlation identifier.</param>
+            <param name="resumeAt">Optional timeout resume timestamp.</param>
+            <param name="output">Optional output.</param>
+            <param name="variables">Optional variables.</param>
+            <returns>Waiting result.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionResult.WaitUntil(System.DateTimeOffset,System.Nullable{System.Text.Json.JsonElement},System.Collections.Generic.IReadOnlyDictionary{System.String,System.Text.Json.JsonElement})">
+            <summary>
+            Creates a waiting-until result.
+            </summary>
+            <param name="resumeAt">Required resume timestamp.</param>
+            <param name="output">Optional output.</param>
+            <param name="variables">Optional variables.</param>
+            <returns>Waiting result.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionResult.Branch(System.String,System.Nullable{System.Text.Json.JsonElement},System.Collections.Generic.IReadOnlyDictionary{System.String,System.Text.Json.JsonElement})">
+            <summary>
+            Creates a branch result.
+            </summary>
+            <param name="transitionKey">Required transition key.</param>
+            <param name="output">Optional output.</param>
+            <param name="variables">Optional variables.</param>
+            <returns>Branch result.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionResult.Failed(System.String,System.String,System.Nullable{System.Text.Json.JsonElement},System.Collections.Generic.IReadOnlyDictionary{System.String,System.Text.Json.JsonElement})">
+            <summary>
+            Creates a failed result.
+            </summary>
+            <param name="errorCode">Optional error code.</param>
+            <param name="errorMessage">Optional error message.</param>
+            <param name="output">Optional output.</param>
+            <param name="variables">Optional variables.</param>
+            <returns>Failed result.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionResult.CompleteWorkflow(System.Nullable{System.Text.Json.JsonElement},System.Collections.Generic.IReadOnlyDictionary{System.String,System.Text.Json.JsonElement})">
+            <summary>
+            Creates a workflow-completed result.
+            </summary>
+            <param name="output">Optional output.</param>
+            <param name="variables">Optional variables.</param>
+            <returns>Workflow completed result.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionResult.Validate">
+            <summary>
+            Validates that outcome-specific properties are compatible.
+            </summary>
+            <exception cref="T:System.InvalidOperationException">Thrown when the result is incompatible.</exception>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Activities.IActivityRegistry">
+            <summary>
+            Registry of activity implementations keyed by activity type.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Activities.IActivityRegistry.RegisteredActivityTypes">
+            <summary>
+            Gets the registered activity types.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Activities.IActivityRegistry.Register(Nexa.WorkflowAutomation.Contracts.Activities.IWorkflowActivity)">
+            <summary>
+            Registers an activity implementation.
+            </summary>
+            <param name="activity">Activity instance.</param>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Activities.IActivityRegistry.Resolve(System.String)">
+            <summary>
+            Resolves an activity by type using case-insensitive matching.
+            </summary>
+            <param name="activityType">Activity type key.</param>
+            <returns>Registered activity.</returns>
+            <exception cref="T:Nexa.WorkflowAutomation.Exceptions.ActivityNotRegisteredException">Thrown when the type is missing.</exception>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Activities.IActivityRegistry.IsRegistered(System.String)">
+            <summary>
+            Determines whether an activity type is registered.
+            </summary>
+            <param name="activityType">Activity type key.</param>
+            <returns><c>true</c> when registered; otherwise <c>false</c>.</returns>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Activities.IWorkflowActivity">
+            <summary>
+            Contract implemented by all workflow activities.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Activities.IWorkflowActivity.ActivityType">
+            <summary>
+            Gets the unique activity type key used for registry resolution.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Activities.IWorkflowActivity.ExecuteAsync(Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionContext,System.Threading.CancellationToken)">
+            <summary>
+            Executes the activity.
+            </summary>
+            <param name="context">Runtime execution context.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>Activity execution result.</returns>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Activities.IWorkflowDefinitionValidator">
+            <summary>
+            Validates workflow definitions.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Activities.IWorkflowDefinitionValidator.Validate(Nexa.WorkflowAutomation.Models.Definitions.WorkflowDefinition)">
+            <summary>
+            Validates a workflow definition.
+            </summary>
+            <param name="definition">Definition to validate.</param>
+            <returns>Validation result.</returns>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Events.IWorkflowEventReceiptRepository">
+            <summary>
+            Persistence contract for idempotent workflow event receipt tracking.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Events.IWorkflowEventReceiptRepository.HasBeenProcessedAsync(System.Guid,System.Guid,System.Threading.CancellationToken)">
+            <summary>
+            Determines whether an event has already been processed.
+            </summary>
+            <param name="organizationId">Organization identifier.</param>
+            <param name="eventId">Event identifier.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns><c>true</c> when already processed; otherwise <c>false</c>.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Events.IWorkflowEventReceiptRepository.MarkProcessedAsync(System.Guid,System.Guid,System.Guid,System.DateTimeOffset,System.Threading.CancellationToken)">
+            <summary>
+            Marks an event as processed.
+            </summary>
+            <param name="organizationId">Organization identifier.</param>
+            <param name="eventId">Event identifier.</param>
+            <param name="workflowExecutionId">Related workflow execution identifier.</param>
+            <param name="processedAt">UTC processing timestamp.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Persistence.DueExecutionQuery">
+            <summary>
+            Query model for finding executions due for timeout or delayed resume.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Persistence.DueExecutionQuery.OrganizationId">
+            <summary>
+            Gets the organization identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Persistence.DueExecutionQuery.AsOf">
+            <summary>
+            Gets the UTC timestamp used to determine due executions.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Persistence.DueExecutionQuery.Limit">
+            <summary>
+            Gets the maximum number of results to return.
+            </summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Persistence.IWorkflowDefinitionRepository">
+            <summary>
+            Persistence contract for workflow definitions.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Persistence.IWorkflowDefinitionRepository.GetByIdAsync(System.Guid,System.Guid,System.Threading.CancellationToken)">
+            <summary>
+            Gets a workflow definition by identifier for an organization.
+            </summary>
+            <param name="organizationId">Organization identifier.</param>
+            <param name="id">Definition identifier.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>The definition, or <c>null</c>.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Persistence.IWorkflowDefinitionRepository.GetPublishedVersionAsync(System.Guid,System.Guid,System.Threading.CancellationToken)">
+            <summary>
+            Gets the published version of a workflow definition for an organization.
+            </summary>
+            <param name="organizationId">Organization identifier.</param>
+            <param name="id">Definition identifier.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>The published definition, or <c>null</c>.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Persistence.IWorkflowDefinitionRepository.AddAsync(Nexa.WorkflowAutomation.Models.Definitions.WorkflowDefinition,System.Threading.CancellationToken)">
+            <summary>
+            Adds a workflow definition.
+            </summary>
+            <param name="definition">Definition to add.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Persistence.IWorkflowDefinitionRepository.UpdateAsync(Nexa.WorkflowAutomation.Models.Definitions.WorkflowDefinition,System.Threading.CancellationToken)">
+            <summary>
+            Updates a workflow definition.
+            </summary>
+            <param name="definition">Definition to update.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Persistence.IWorkflowExecutionRepository">
+            <summary>
+            Persistence contract for workflow executions.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Persistence.IWorkflowExecutionRepository.GetByIdAsync(System.Guid,System.Guid,System.Threading.CancellationToken)">
+            <summary>
+            Gets a workflow execution by identifier for an organization.
+            </summary>
+            <param name="organizationId">Organization identifier.</param>
+            <param name="id">Execution identifier.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>The execution, or <c>null</c>.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Persistence.IWorkflowExecutionRepository.AddAsync(Nexa.WorkflowAutomation.Models.Executions.WorkflowExecution,System.Threading.CancellationToken)">
+            <summary>
+            Adds a workflow execution.
+            </summary>
+            <param name="execution">Execution to add.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Persistence.IWorkflowExecutionRepository.UpdateAsync(Nexa.WorkflowAutomation.Models.Executions.WorkflowExecution,System.Int32,System.Threading.CancellationToken)">
+            <summary>
+            Updates a workflow execution using optimistic concurrency.
+            </summary>
+            <param name="execution">Execution to update.</param>
+            <param name="expectedRevision">Expected revision before update.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <exception cref="T:Nexa.WorkflowAutomation.Exceptions.WorkflowConcurrencyException">Thrown when the revision does not match.</exception>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Persistence.IWorkflowExecutionRepository.FindWaitingExecutionsAsync(Nexa.WorkflowAutomation.Contracts.Persistence.WaitingExecutionQuery,System.Threading.CancellationToken)">
+            <summary>
+            Finds waiting executions matching the query.
+            </summary>
+            <param name="query">Waiting execution query.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>Matching executions.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Persistence.IWorkflowExecutionRepository.GetDueExecutionsAsync(Nexa.WorkflowAutomation.Contracts.Persistence.DueExecutionQuery,System.Threading.CancellationToken)">
+            <summary>
+            Gets executions that are due for resume or timeout processing.
+            </summary>
+            <param name="query">Due execution query.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>Due executions.</returns>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Persistence.IWorkflowHistoryRepository">
+            <summary>
+            Persistence contract for workflow history entries.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Persistence.IWorkflowHistoryRepository.AddAsync(Nexa.WorkflowAutomation.Models.Executions.WorkflowHistoryEntry,System.Threading.CancellationToken)">
+            <summary>
+            Adds a history entry.
+            </summary>
+            <param name="entry">History entry.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Persistence.IWorkflowHistoryRepository.GetByExecutionIdAsync(System.Guid,System.Guid,System.Threading.CancellationToken)">
+            <summary>
+            Gets history entries for a workflow execution.
+            </summary>
+            <param name="organizationId">Organization identifier.</param>
+            <param name="workflowExecutionId">Workflow execution identifier.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>History entries ordered by occurrence.</returns>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Persistence.IWorkflowStepExecutionRepository">
+            <summary>
+            Persistence contract for workflow step executions.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Persistence.IWorkflowStepExecutionRepository.GetByIdAsync(System.Guid,System.Guid,System.Threading.CancellationToken)">
+            <summary>
+            Gets a step execution by identifier.
+            </summary>
+            <param name="organizationId">Organization identifier used for tenant scoping.</param>
+            <param name="id">Step execution identifier.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>The step execution, or <c>null</c>.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Persistence.IWorkflowStepExecutionRepository.GetCurrentAsync(System.Guid,System.Guid,System.Threading.CancellationToken)">
+            <summary>
+            Gets the current step execution for a workflow execution.
+            </summary>
+            <param name="organizationId">Organization identifier.</param>
+            <param name="workflowExecutionId">Workflow execution identifier.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>The current step execution, or <c>null</c>.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Persistence.IWorkflowStepExecutionRepository.AddAsync(Nexa.WorkflowAutomation.Models.Executions.WorkflowStepExecution,System.Threading.CancellationToken)">
+            <summary>
+            Adds a step execution.
+            </summary>
+            <param name="stepExecution">Step execution to add.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Persistence.IWorkflowStepExecutionRepository.UpdateAsync(Nexa.WorkflowAutomation.Models.Executions.WorkflowStepExecution,System.Threading.CancellationToken)">
+            <summary>
+            Updates a step execution.
+            </summary>
+            <param name="stepExecution">Step execution to update.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Persistence.IWorkflowUnitOfWork">
+            <summary>
+            Unit of work abstraction for coordinating persistence operations.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Persistence.IWorkflowUnitOfWork.ExecuteAsync(System.Func{System.Threading.CancellationToken,System.Threading.Tasks.Task},System.Threading.CancellationToken)">
+            <summary>
+            Executes a unit of work.
+            </summary>
+            <param name="action">Action to execute.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Persistence.IWorkflowUnitOfWork.ExecuteAsync``1(System.Func{System.Threading.CancellationToken,System.Threading.Tasks.Task{``0}},System.Threading.CancellationToken)">
+            <summary>
+            Executes a unit of work that returns a value.
+            </summary>
+            <typeparam name="T">Return type.</typeparam>
+            <param name="action">Action to execute.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>The action result.</returns>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Persistence.WaitingExecutionQuery">
+            <summary>
+            Query model for finding waiting workflow executions.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Persistence.WaitingExecutionQuery.OrganizationId">
+            <summary>
+            Gets the organization identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Persistence.WaitingExecutionQuery.EventType">
+            <summary>
+            Gets an optional event type filter.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Persistence.WaitingExecutionQuery.CorrelationId">
+            <summary>
+            Gets an optional correlation identifier filter.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Persistence.WaitingExecutionQuery.EntityType">
+            <summary>
+            Gets an optional entity type filter.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Persistence.WaitingExecutionQuery.EntityId">
+            <summary>
+            Gets an optional entity identifier filter.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Persistence.WaitingExecutionQuery.Limit">
+            <summary>
+            Gets the maximum number of results to return.
+            </summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.IAIService">
+            <summary>
+            Provider contract for AI operations.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Providers.IAIService.ExecuteAsync(Nexa.WorkflowAutomation.Contracts.Providers.AIExecutionRequest,System.Threading.CancellationToken)">
+            <summary>
+            Executes an AI operation.
+            </summary>
+            <param name="request">Execution request.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>AI execution result.</returns>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.AIExecutionRequest">
+            <summary>Request to execute an AI operation.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.AIExecutionRequest.OrganizationId">
+            <summary>Gets or sets the organization identifier.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.AIExecutionRequest.Operation">
+            <summary>Gets or sets the operation name.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.AIExecutionRequest.Prompt">
+            <summary>Gets or sets the prompt.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.AIExecutionRequest.Inputs">
+            <summary>Gets or sets optional input variables.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.AIExecutionRequest.StructuredOutputSchema">
+            <summary>Gets or sets an optional structured output schema.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.AIExecutionRequest.Metadata">
+            <summary>Gets or sets optional metadata.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.AIExecutionResult">
+            <summary>Result of an AI operation.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.AIExecutionResult.Output">
+            <summary>Gets or sets the AI output.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.ICalendarService">
+            <summary>
+            Provider contract for calendar and meeting scheduling.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Providers.ICalendarService.ScheduleAsync(Nexa.WorkflowAutomation.Contracts.Providers.MeetingScheduleRequest,System.Threading.CancellationToken)">
+            <summary>
+            Schedules a meeting or creates a scheduling link.
+            </summary>
+            <param name="request">Schedule request.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>Schedule result.</returns>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.MeetingSchedulingMode">
+            <summary>Meeting scheduling modes.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Contracts.Providers.MeetingSchedulingMode.CreateSchedulingLink">
+            <summary>Create a scheduling link for the participant.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Contracts.Providers.MeetingSchedulingMode.CreateMeetingDirectly">
+            <summary>Create a meeting directly.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.MeetingScheduleRequest">
+            <summary>Request to schedule a meeting.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.MeetingScheduleRequest.OrganizationId">
+            <summary>Gets or sets the organization identifier.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.MeetingScheduleRequest.SchedulingMode">
+            <summary>Gets or sets the scheduling mode.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.MeetingScheduleRequest.ParticipantEmail">
+            <summary>Gets or sets the participant email.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.MeetingScheduleRequest.ParticipantName">
+            <summary>Gets or sets the participant name.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.MeetingScheduleRequest.MeetingType">
+            <summary>Gets or sets the meeting type.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.MeetingScheduleRequest.Title">
+            <summary>Gets or sets the title.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.MeetingScheduleRequest.Description">
+            <summary>Gets or sets the description.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.MeetingScheduleRequest.Metadata">
+            <summary>Gets or sets optional metadata.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.MeetingScheduleResult">
+            <summary>Result of scheduling a meeting.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.MeetingScheduleResult.MeetingId">
+            <summary>Gets or sets the meeting identifier.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.MeetingScheduleResult.SchedulingUrl">
+            <summary>Gets or sets an optional scheduling URL.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.ICallService">
+            <summary>
+            Provider contract for call operations.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Providers.ICallService.CreateAsync(Nexa.WorkflowAutomation.Contracts.Providers.CallOperationRequest,System.Threading.CancellationToken)">
+            <summary>
+            Creates a call request or triggers a provider call.
+            </summary>
+            <param name="request">Call request.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>Call result.</returns>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.CallOperationMode">
+            <summary>Call operation modes.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Contracts.Providers.CallOperationMode.CreateManualTask">
+            <summary>Create a manual call task/request.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Contracts.Providers.CallOperationMode.TriggerProviderCall">
+            <summary>Trigger a provider-managed call.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.CallOperationRequest">
+            <summary>Request to create or trigger a call.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.CallOperationRequest.OrganizationId">
+            <summary>Gets or sets the organization identifier.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.CallOperationRequest.PhoneNumber">
+            <summary>Gets or sets the phone number.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.CallOperationRequest.Mode">
+            <summary>Gets or sets the call mode.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.CallOperationRequest.Script">
+            <summary>Gets or sets an optional script.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.CallOperationRequest.Metadata">
+            <summary>Gets or sets optional metadata.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.CallOperationResult">
+            <summary>Result of a call operation.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.CallOperationResult.CallId">
+            <summary>Gets or sets the call request identifier.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.IConversationService">
+            <summary>
+            Provider contract for integrating with product-owned conversation modules.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Providers.IConversationService.RegisterOutboundMessageAsync(Nexa.WorkflowAutomation.Contracts.Providers.RegisterOutboundMessageRequest,System.Threading.CancellationToken)">
+            <summary>
+            Registers an outbound message in the product conversation store.
+            </summary>
+            <param name="request">Registration request.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>Registration result.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Providers.IConversationService.GetConversationContextAsync(Nexa.WorkflowAutomation.Contracts.Providers.GetConversationContextRequest,System.Threading.CancellationToken)">
+            <summary>
+            Gets conversation context for a workflow.
+            </summary>
+            <param name="request">Context request.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>Conversation context.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Providers.IConversationService.AppendMetadataAsync(Nexa.WorkflowAutomation.Contracts.Providers.AppendConversationMetadataRequest,System.Threading.CancellationToken)">
+            <summary>
+            Appends workflow-related metadata to a conversation.
+            </summary>
+            <param name="request">Metadata request.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.RegisterOutboundMessageRequest">
+            <summary>Request to register an outbound conversation message.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.RegisterOutboundMessageRequest.OrganizationId">
+            <summary>Gets or sets the organization identifier.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.RegisterOutboundMessageRequest.ConversationId">
+            <summary>Gets or sets the conversation identifier.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.RegisterOutboundMessageRequest.Channel">
+            <summary>Gets or sets the channel name.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.RegisterOutboundMessageRequest.Body">
+            <summary>Gets or sets the message body.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.RegisterOutboundMessageRequest.ExternalMessageId">
+            <summary>Gets or sets an optional external message identifier.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.RegisterOutboundMessageRequest.Metadata">
+            <summary>Gets or sets optional metadata.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.ConversationMessageResult">
+            <summary>Result of registering a conversation message.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.ConversationMessageResult.MessageId">
+            <summary>Gets or sets the conversation message identifier.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.GetConversationContextRequest">
+            <summary>Request to get conversation context.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.GetConversationContextRequest.OrganizationId">
+            <summary>Gets or sets the organization identifier.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.GetConversationContextRequest.ConversationId">
+            <summary>Gets or sets the conversation identifier.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.ConversationContextResult">
+            <summary>Conversation context result.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.ConversationContextResult.ConversationId">
+            <summary>Gets or sets the conversation identifier.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.ConversationContextResult.Context">
+            <summary>Gets or sets channel metadata.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.AppendConversationMetadataRequest">
+            <summary>Request to append conversation metadata.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.AppendConversationMetadataRequest.OrganizationId">
+            <summary>Gets or sets the organization identifier.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.AppendConversationMetadataRequest.ConversationId">
+            <summary>Gets or sets the conversation identifier.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.AppendConversationMetadataRequest.Metadata">
+            <summary>Gets or sets metadata to append.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.IDocumentService">
+            <summary>
+            Provider contract for document retrieval and delivery references.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Providers.IDocumentService.SendAsync(Nexa.WorkflowAutomation.Contracts.Providers.DocumentSendRequest,System.Threading.CancellationToken)">
+            <summary>
+            Sends or exposes a document reference.
+            </summary>
+            <param name="request">Send request.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>Document send result.</returns>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.DocumentSendRequest">
+            <summary>Request to send a document.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.DocumentSendRequest.OrganizationId">
+            <summary>Gets or sets the organization identifier.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.DocumentSendRequest.DocumentId">
+            <summary>Gets or sets the document identifier.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.DocumentSendRequest.Recipient">
+            <summary>Gets or sets the recipient identifier or address.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.DocumentSendRequest.Message">
+            <summary>Gets or sets an optional message.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.DocumentSendRequest.Metadata">
+            <summary>Gets or sets optional metadata.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.DocumentSendResult">
+            <summary>Result of sending a document.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.DocumentSendResult.DocumentUrl">
+            <summary>Gets or sets an optional document URL.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.IEmailService">
+            <summary>
+            Provider contract for sending email messages.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Providers.IEmailService.SendAsync(Nexa.WorkflowAutomation.Contracts.Providers.EmailSendRequest,System.Threading.CancellationToken)">
+            <summary>
+            Sends an email message.
+            </summary>
+            <param name="request">Send request.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>Send result.</returns>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.EmailSendRequest">
+            <summary>
+            Request to send an email.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.EmailSendRequest.OrganizationId">
+            <summary>Gets or sets the organization identifier.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.EmailSendRequest.To">
+            <summary>Gets or sets the recipient address.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.EmailSendRequest.Subject">
+            <summary>Gets or sets the subject.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.EmailSendRequest.Body">
+            <summary>Gets or sets the body.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.EmailSendRequest.AttachmentIds">
+            <summary>Gets or sets optional attachment identifiers.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.EmailSendRequest.Metadata">
+            <summary>Gets or sets optional metadata.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.EmailSendResult">
+            <summary>
+            Result of sending an email.
+            </summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.IQuestionnaireService">
+            <summary>
+            Provider contract for questionnaire or bot-question sessions.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Providers.IQuestionnaireService.StartSessionAsync(Nexa.WorkflowAutomation.Contracts.Providers.StartQuestionnaireSessionRequest,System.Threading.CancellationToken)">
+            <summary>
+            Starts a questionnaire session.
+            </summary>
+            <param name="request">Start request.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>Session result.</returns>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.StartQuestionnaireSessionRequest">
+            <summary>Request to start a questionnaire session.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.StartQuestionnaireSessionRequest.OrganizationId">
+            <summary>Gets or sets the organization identifier.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.StartQuestionnaireSessionRequest.QuestionnaireId">
+            <summary>Gets or sets the questionnaire identifier.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.StartQuestionnaireSessionRequest.Channel">
+            <summary>Gets or sets the channel.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.StartQuestionnaireSessionRequest.ContactId">
+            <summary>Gets or sets the contact identifier.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.StartQuestionnaireSessionRequest.ConversationId">
+            <summary>Gets or sets an optional conversation identifier.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.StartQuestionnaireSessionRequest.Metadata">
+            <summary>Gets or sets optional metadata.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.QuestionnaireSessionResult">
+            <summary>Result of starting a questionnaire session.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.QuestionnaireSessionResult.SessionId">
+            <summary>Gets or sets the session identifier used as correlation id.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.ISignatureService">
+            <summary>
+            Provider contract for electronic signature requests.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Providers.ISignatureService.SendForSignatureAsync(Nexa.WorkflowAutomation.Contracts.Providers.SignatureSendRequest,System.Threading.CancellationToken)">
+            <summary>
+            Sends a document for signature.
+            </summary>
+            <param name="request">Signature request.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>Signature request result.</returns>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.SignatureSendRequest">
+            <summary>Request to send a document for signature.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.SignatureSendRequest.OrganizationId">
+            <summary>Gets or sets the organization identifier.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.SignatureSendRequest.DocumentId">
+            <summary>Gets or sets the document identifier.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.SignatureSendRequest.RecipientName">
+            <summary>Gets or sets the recipient name.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.SignatureSendRequest.RecipientEmail">
+            <summary>Gets or sets the recipient email.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.SignatureSendRequest.Subject">
+            <summary>Gets or sets the subject.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.SignatureSendRequest.Message">
+            <summary>Gets or sets the message.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.SignatureSendRequest.Metadata">
+            <summary>Gets or sets optional metadata.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.SignatureRequestResult">
+            <summary>Result of a signature request.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.SignatureRequestResult.EnvelopeId">
+            <summary>Gets or sets the signature envelope or request identifier.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.ITaskService">
+            <summary>
+            Provider contract for creating tasks in the consuming product.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Providers.ITaskService.CreateAsync(Nexa.WorkflowAutomation.Contracts.Providers.TaskCreateRequest,System.Threading.CancellationToken)">
+            <summary>
+            Creates a task.
+            </summary>
+            <param name="request">Create request.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>Task creation result.</returns>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.TaskCreateRequest">
+            <summary>Request to create a task.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.TaskCreateRequest.OrganizationId">
+            <summary>Gets or sets the organization identifier.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.TaskCreateRequest.Title">
+            <summary>Gets or sets the title.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.TaskCreateRequest.Description">
+            <summary>Gets or sets the description.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.TaskCreateRequest.AssigneeId">
+            <summary>Gets or sets an optional assignee identifier.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.TaskCreateRequest.DueAt">
+            <summary>Gets or sets an optional due timestamp.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.TaskCreateRequest.Priority">
+            <summary>Gets or sets an optional priority.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.TaskCreateRequest.Metadata">
+            <summary>Gets or sets optional metadata.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.TaskCreateResult">
+            <summary>Result of creating a task.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.TaskCreateResult.TaskId">
+            <summary>Gets or sets the created task identifier.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.IWhatsAppService">
+            <summary>
+            Provider contract for sending WhatsApp messages.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Contracts.Providers.IWhatsAppService.SendAsync(Nexa.WorkflowAutomation.Contracts.Providers.WhatsAppSendRequest,System.Threading.CancellationToken)">
+            <summary>
+            Sends a WhatsApp message.
+            </summary>
+            <param name="request">Send request.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>Send result.</returns>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.WhatsAppSendRequest">
+            <summary>
+            Request to send a WhatsApp message.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.WhatsAppSendRequest.OrganizationId">
+            <summary>Gets or sets the organization identifier.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.WhatsAppSendRequest.PhoneNumber">
+            <summary>Gets or sets the recipient phone number.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.WhatsAppSendRequest.Message">
+            <summary>Gets or sets the message body.</summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.WhatsAppSendRequest.Metadata">
+            <summary>Gets or sets optional metadata.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.MessageSendResult">
+            <summary>
+            Result of sending a messaging provider message.
+            </summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Providers.ProviderResultBase">
+            <summary>
+            Common result fields for provider operations.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.ProviderResultBase.Success">
+            <summary>
+            Gets or sets a value indicating whether the operation succeeded.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.ProviderResultBase.ExternalReferenceId">
+            <summary>
+            Gets or sets the external reference identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.ProviderResultBase.ErrorCode">
+            <summary>
+            Gets or sets an optional error code.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.ProviderResultBase.ErrorMessage">
+            <summary>
+            Gets or sets an optional error message.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Providers.ProviderResultBase.Metadata">
+            <summary>
+            Gets or sets optional provider metadata.
+            </summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Scheduling.ISystemClock">
+            <summary>
+            Abstraction over the system clock for testability.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Scheduling.ISystemClock.UtcNow">
+            <summary>
+            Gets the current UTC timestamp.
+            </summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Contracts.Scheduling.SystemClock">
+            <summary>
+            Default system clock implementation.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Contracts.Scheduling.SystemClock.UtcNow">
+            <inheritdoc />
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Engine.ActivityRegistry">
+            <summary>
+            Default in-memory activity registry.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Engine.ActivityRegistry.RegisteredActivityTypes">
+            <inheritdoc />
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Engine.ActivityRegistry.Register(Nexa.WorkflowAutomation.Contracts.Activities.IWorkflowActivity)">
+            <inheritdoc />
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Engine.ActivityRegistry.Resolve(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Engine.ActivityRegistry.IsRegistered(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Engine.IWorkflowEngine">
+            <summary>
+            Executes workflow definitions one activity at a time.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Engine.IWorkflowEngine.StartAsync(Nexa.WorkflowAutomation.Models.Executions.StartWorkflowRequest,System.Threading.CancellationToken)">
+            <summary>
+            Starts a new workflow execution for a published definition.
+            Does not execute the first activity.
+            </summary>
+            <param name="request">Start request.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>Created execution in Pending status.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Engine.IWorkflowEngine.ExecuteCurrentStepAsync(System.Guid,System.Guid,System.Threading.CancellationToken)">
+            <summary>
+            Executes the current step exactly once.
+            </summary>
+            <param name="organizationId">Organization identifier.</param>
+            <param name="executionId">Execution identifier.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>Updated execution.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Engine.IWorkflowEngine.ResumeFromEventAsync(Nexa.WorkflowAutomation.Models.Executions.ResumeWorkflowFromEventRequest,System.Threading.CancellationToken)">
+            <summary>
+            Resumes a waiting execution from a normalized external event.
+            </summary>
+            <param name="request">Resume request.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>Updated execution.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Engine.IWorkflowEngine.ResumeFromTimeoutAsync(System.Guid,System.Guid,System.DateTimeOffset,System.Threading.CancellationToken)">
+            <summary>
+            Resumes a waiting execution after a delay or timeout.
+            </summary>
+            <param name="organizationId">Organization identifier.</param>
+            <param name="executionId">Execution identifier.</param>
+            <param name="occurredAt">UTC occurrence timestamp.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>Updated execution.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Engine.IWorkflowEngine.PauseAsync(System.Guid,System.Guid,System.Threading.CancellationToken)">
+            <summary>
+            Pauses a running or pending execution.
+            </summary>
+            <param name="organizationId">Organization identifier.</param>
+            <param name="executionId">Execution identifier.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>Updated execution.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Engine.IWorkflowEngine.CancelAsync(System.Guid,System.Guid,System.String,System.Threading.CancellationToken)">
+            <summary>
+            Cancels an execution.
+            </summary>
+            <param name="organizationId">Organization identifier.</param>
+            <param name="executionId">Execution identifier.</param>
+            <param name="reason">Optional cancellation reason.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>Updated execution.</returns>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Engine.IWorkflowTransitionResolver">
+            <summary>
+            Resolves the next step after an activity outcome.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Engine.IWorkflowTransitionResolver.ResolveNextStep(Nexa.WorkflowAutomation.Models.Definitions.WorkflowDefinition,Nexa.WorkflowAutomation.Models.Definitions.WorkflowStepDefinition)">
+            <summary>
+            Resolves the normal next step identifier.
+            </summary>
+            <param name="definition">Workflow definition.</param>
+            <param name="step">Current step.</param>
+            <returns>Next step identifier, or <c>null</c> when the workflow should complete.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Engine.IWorkflowTransitionResolver.ResolveBranch(Nexa.WorkflowAutomation.Models.Definitions.WorkflowDefinition,Nexa.WorkflowAutomation.Models.Definitions.WorkflowStepDefinition,System.String)">
+            <summary>
+            Resolves a branch transition by key, falling back to <c>default</c>.
+            </summary>
+            <param name="definition">Workflow definition.</param>
+            <param name="step">Current step.</param>
+            <param name="transitionKey">Requested transition key.</param>
+            <returns>Target step identifier.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Engine.IWorkflowTransitionResolver.ResolveFailureStep(Nexa.WorkflowAutomation.Models.Definitions.WorkflowDefinition,Nexa.WorkflowAutomation.Models.Definitions.WorkflowStepDefinition)">
+            <summary>
+            Resolves the failure step.
+            </summary>
+            <param name="definition">Workflow definition.</param>
+            <param name="step">Current step.</param>
+            <returns>Failure step identifier, or <c>null</c>.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Engine.IWorkflowTransitionResolver.ResolveTimeoutStep(Nexa.WorkflowAutomation.Models.Definitions.WorkflowDefinition,Nexa.WorkflowAutomation.Models.Definitions.WorkflowStepDefinition)">
+            <summary>
+            Resolves the timeout step.
+            </summary>
+            <param name="definition">Workflow definition.</param>
+            <param name="step">Current step.</param>
+            <returns>Timeout step identifier, or <c>null</c>.</returns>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Engine.WorkflowEngine">
+            <summary>
+            Default one-step workflow engine.
+            Waiting is persisted state; consumers request the next execution.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Engine.WorkflowEngine.#ctor(Nexa.WorkflowAutomation.Contracts.Persistence.IWorkflowDefinitionRepository,Nexa.WorkflowAutomation.Contracts.Persistence.IWorkflowExecutionRepository,Nexa.WorkflowAutomation.Contracts.Persistence.IWorkflowStepExecutionRepository,Nexa.WorkflowAutomation.Contracts.Persistence.IWorkflowHistoryRepository,Nexa.WorkflowAutomation.Contracts.Events.IWorkflowEventReceiptRepository,Nexa.WorkflowAutomation.Contracts.Persistence.IWorkflowUnitOfWork,Nexa.WorkflowAutomation.Contracts.Activities.IActivityRegistry,Nexa.WorkflowAutomation.Engine.IWorkflowTransitionResolver,Nexa.WorkflowAutomation.Contracts.Activities.IWorkflowDefinitionValidator,Nexa.WorkflowAutomation.Contracts.Scheduling.ISystemClock,System.IServiceProvider,Microsoft.Extensions.Logging.ILogger{Nexa.WorkflowAutomation.Engine.WorkflowEngine})">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Engine.WorkflowEngine"/> class.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Engine.WorkflowEngine.StartAsync(Nexa.WorkflowAutomation.Models.Executions.StartWorkflowRequest,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Engine.WorkflowEngine.ExecuteCurrentStepAsync(System.Guid,System.Guid,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Engine.WorkflowEngine.ResumeFromEventAsync(Nexa.WorkflowAutomation.Models.Executions.ResumeWorkflowFromEventRequest,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Engine.WorkflowEngine.ResumeFromTimeoutAsync(System.Guid,System.Guid,System.DateTimeOffset,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Engine.WorkflowEngine.PauseAsync(System.Guid,System.Guid,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Engine.WorkflowEngine.CancelAsync(System.Guid,System.Guid,System.String,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Engine.WorkflowTransitionResolver">
+            <summary>
+            Default workflow transition resolver.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Engine.WorkflowTransitionResolver.ResolveNextStep(Nexa.WorkflowAutomation.Models.Definitions.WorkflowDefinition,Nexa.WorkflowAutomation.Models.Definitions.WorkflowStepDefinition)">
+            <inheritdoc />
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Engine.WorkflowTransitionResolver.ResolveBranch(Nexa.WorkflowAutomation.Models.Definitions.WorkflowDefinition,Nexa.WorkflowAutomation.Models.Definitions.WorkflowStepDefinition,System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Engine.WorkflowTransitionResolver.ResolveFailureStep(Nexa.WorkflowAutomation.Models.Definitions.WorkflowDefinition,Nexa.WorkflowAutomation.Models.Definitions.WorkflowStepDefinition)">
+            <inheritdoc />
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Engine.WorkflowTransitionResolver.ResolveTimeoutStep(Nexa.WorkflowAutomation.Models.Definitions.WorkflowDefinition,Nexa.WorkflowAutomation.Models.Definitions.WorkflowStepDefinition)">
+            <inheritdoc />
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Enums.ActivityExecutionOutcome">
+            <summary>
+            Outcome returned by an activity after execution.
+            </summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.ActivityExecutionOutcome.Completed">
+            <summary>Activity completed and the engine should move to the next step.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.ActivityExecutionOutcome.WaitingForEvent">
+            <summary>Activity is waiting for an external event.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.ActivityExecutionOutcome.WaitingUntil">
+            <summary>Activity is waiting until a specific UTC time.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.ActivityExecutionOutcome.Branch">
+            <summary>Activity selected a branch transition.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.ActivityExecutionOutcome.Failed">
+            <summary>Activity failed.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.ActivityExecutionOutcome.WorkflowCompleted">
+            <summary>Activity requested the workflow to complete.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Enums.MissingVariableBehavior">
+            <summary>
+            Behavior when a template references a missing variable.
+            </summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.MissingVariableBehavior.Throw">
+            <summary>Throw <see cref="T:Nexa.WorkflowAutomation.Exceptions.WorkflowVariableNotFoundException"/>.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.MissingVariableBehavior.ReplaceWithEmpty">
+            <summary>Replace the token with an empty string.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.MissingVariableBehavior.PreserveToken">
+            <summary>Leave the original token unchanged.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Enums.WorkflowDefinitionStatus">
+            <summary>
+            Lifecycle status of a workflow definition.
+            </summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowDefinitionStatus.Draft">
+            <summary>Definition is editable and not available for new executions.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowDefinitionStatus.Published">
+            <summary>Definition is immutable and available for new executions.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowDefinitionStatus.Archived">
+            <summary>Definition is retired and should not start new executions.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Enums.WorkflowExecutionStatus">
+            <summary>
+            Runtime status of a workflow execution.
+            </summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowExecutionStatus.Pending">
+            <summary>Execution is created and waiting to run the current step.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowExecutionStatus.Running">
+            <summary>Execution is actively running a step.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowExecutionStatus.Waiting">
+            <summary>Execution is waiting for an external event or a future time.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowExecutionStatus.Paused">
+            <summary>Execution is paused by an operator or system action.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowExecutionStatus.Completed">
+            <summary>Execution completed successfully.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowExecutionStatus.Cancelled">
+            <summary>Execution was cancelled.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowExecutionStatus.Failed">
+            <summary>Execution failed and cannot continue.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Enums.WorkflowHistoryEventType">
+            <summary>
+            Types of workflow history events recorded by the engine.
+            </summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowHistoryEventType.WorkflowStarted">
+            <summary>Workflow execution started.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowHistoryEventType.StepStarted">
+            <summary>Step execution started.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowHistoryEventType.StepCompleted">
+            <summary>Step execution completed successfully.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowHistoryEventType.StepWaiting">
+            <summary>Step entered a waiting state.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowHistoryEventType.StepFailed">
+            <summary>Step failed.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowHistoryEventType.StepTimedOut">
+            <summary>Step timed out.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowHistoryEventType.WorkflowPaused">
+            <summary>Workflow was paused.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowHistoryEventType.WorkflowResumed">
+            <summary>Workflow was resumed.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowHistoryEventType.WorkflowCompleted">
+            <summary>Workflow completed.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowHistoryEventType.WorkflowCancelled">
+            <summary>Workflow was cancelled.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowHistoryEventType.WorkflowFailed">
+            <summary>Workflow failed.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowHistoryEventType.ExternalEventReceived">
+            <summary>An external event was received.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowHistoryEventType.VariableUpdated">
+            <summary>One or more variables were updated.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Enums.WorkflowStepExecutionStatus">
+            <summary>
+            Runtime status of a single step execution attempt.
+            </summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowStepExecutionStatus.Pending">
+            <summary>Step execution is created but not started.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowStepExecutionStatus.Running">
+            <summary>Step activity is currently executing.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowStepExecutionStatus.Waiting">
+            <summary>Step is waiting for an event or a future resume time.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowStepExecutionStatus.Succeeded">
+            <summary>Step completed successfully.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowStepExecutionStatus.Failed">
+            <summary>Step failed.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowStepExecutionStatus.Skipped">
+            <summary>Step was skipped.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowStepExecutionStatus.TimedOut">
+            <summary>Step timed out while waiting.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowStepExecutionStatus.Cancelled">
+            <summary>Step was cancelled.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Enums.WorkflowValidationSeverity">
+            <summary>
+            Severity of a workflow definition validation finding.
+            </summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowValidationSeverity.Information">
+            <summary>Informational finding that does not block publishing.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowValidationSeverity.Warning">
+            <summary>Warning that should be reviewed but does not block publishing by default.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowValidationSeverity.Error">
+            <summary>Error that invalidates the definition.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Enums.WorkflowVariableScope">
+            <summary>
+            Scope of a workflow variable.
+            </summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowVariableScope.Execution">
+            <summary>Variable lives for the entire workflow execution.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowVariableScope.Step">
+            <summary>Variable is associated with a step execution.</summary>
+        </member>
+        <member name="F:Nexa.WorkflowAutomation.Enums.WorkflowVariableScope.System">
+            <summary>Variable is system-managed.</summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Exceptions.ActivityConfigurationException">
+            <summary>
+            Thrown when an activity configuration is invalid.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Exceptions.ActivityConfigurationException.#ctor(System.String,System.String)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Exceptions.ActivityConfigurationException"/> class.
+            </summary>
+            <param name="activityType">Activity type.</param>
+            <param name="message">Configuration error message.</param>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Exceptions.ActivityConfigurationException.ActivityType">
+            <summary>
+            Gets the activity type.
+            </summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Exceptions.ActivityNotRegisteredException">
+            <summary>
+            Thrown when an activity type is not registered in the activity registry.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Exceptions.ActivityNotRegisteredException.#ctor(System.String)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Exceptions.ActivityNotRegisteredException"/> class.
+            </summary>
+            <param name="activityType">Missing activity type.</param>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Exceptions.ActivityNotRegisteredException.ActivityType">
+            <summary>
+            Gets the missing activity type.
+            </summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Exceptions.ProviderOperationException">
+            <summary>
+            Thrown when a provider operation fails in a non-provider-specific way.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Exceptions.ProviderOperationException.#ctor(System.String,System.String,System.String,System.String)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Exceptions.ProviderOperationException"/> class.
+            </summary>
+            <param name="provider">Provider name.</param>
+            <param name="message">Failure message.</param>
+            <param name="errorCode">Optional error code.</param>
+            <param name="externalReferenceId">Optional external reference.</param>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Exceptions.ProviderOperationException.Provider">
+            <summary>
+            Gets the provider name.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Exceptions.ProviderOperationException.ErrorCode">
+            <summary>
+            Gets an optional error code.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Exceptions.ProviderOperationException.ExternalReferenceId">
+            <summary>
+            Gets an optional external reference identifier.
+            </summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Exceptions.WorkflowAutomationException">
+            <summary>
+            Base exception for all workflow automation errors.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Exceptions.WorkflowAutomationException.#ctor(System.String)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Exceptions.WorkflowAutomationException"/> class.
+            </summary>
+            <param name="message">Error message.</param>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Exceptions.WorkflowAutomationException.#ctor(System.String,System.Exception)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Exceptions.WorkflowAutomationException"/> class.
+            </summary>
+            <param name="message">Error message.</param>
+            <param name="innerException">Inner exception.</param>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Exceptions.WorkflowConcurrencyException">
+            <summary>
+            Thrown when an optimistic concurrency conflict is detected.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Exceptions.WorkflowConcurrencyException.#ctor(System.Guid,System.Int32)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Exceptions.WorkflowConcurrencyException"/> class.
+            </summary>
+            <param name="executionId">Execution identifier.</param>
+            <param name="expectedRevision">Expected revision.</param>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Exceptions.WorkflowConcurrencyException.ExecutionId">
+            <summary>
+            Gets the execution identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Exceptions.WorkflowConcurrencyException.ExpectedRevision">
+            <summary>
+            Gets the expected revision.
+            </summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Exceptions.WorkflowDefinitionNotFoundException">
+            <summary>
+            Thrown when a workflow definition cannot be found.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Exceptions.WorkflowDefinitionNotFoundException.#ctor(System.Guid,System.Guid)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Exceptions.WorkflowDefinitionNotFoundException"/> class.
+            </summary>
+            <param name="organizationId">Organization identifier.</param>
+            <param name="workflowDefinitionId">Workflow definition identifier.</param>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Exceptions.WorkflowDefinitionNotFoundException.OrganizationId">
+            <summary>
+            Gets the organization identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Exceptions.WorkflowDefinitionNotFoundException.WorkflowDefinitionId">
+            <summary>
+            Gets the workflow definition identifier.
+            </summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Exceptions.WorkflowDefinitionValidationException">
+            <summary>
+            Thrown when a workflow definition fails validation.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Exceptions.WorkflowDefinitionValidationException.#ctor(Nexa.WorkflowAutomation.Validation.WorkflowValidationResult)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Exceptions.WorkflowDefinitionValidationException"/> class.
+            </summary>
+            <param name="result">Validation result.</param>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Exceptions.WorkflowDefinitionValidationException.Result">
+            <summary>
+            Gets the validation result.
+            </summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Exceptions.WorkflowExecutionNotFoundException">
+            <summary>
+            Thrown when a workflow execution cannot be found for the specified tenant.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Exceptions.WorkflowExecutionNotFoundException.#ctor(System.Guid,System.Guid)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Exceptions.WorkflowExecutionNotFoundException"/> class.
+            </summary>
+            <param name="organizationId">Organization identifier.</param>
+            <param name="executionId">Execution identifier.</param>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Exceptions.WorkflowExecutionNotFoundException.OrganizationId">
+            <summary>
+            Gets the organization identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Exceptions.WorkflowExecutionNotFoundException.ExecutionId">
+            <summary>
+            Gets the execution identifier.
+            </summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Exceptions.WorkflowInvalidStateException">
+            <summary>
+            Thrown when an operation is invalid for the current workflow execution state.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Exceptions.WorkflowInvalidStateException.#ctor(System.Guid,Nexa.WorkflowAutomation.Enums.WorkflowExecutionStatus,System.String)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Exceptions.WorkflowInvalidStateException"/> class.
+            </summary>
+            <param name="executionId">Execution identifier.</param>
+            <param name="status">Current status.</param>
+            <param name="operation">Attempted operation.</param>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Exceptions.WorkflowInvalidStateException.ExecutionId">
+            <summary>
+            Gets the execution identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Exceptions.WorkflowInvalidStateException.Status">
+            <summary>
+            Gets the current execution status.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Exceptions.WorkflowInvalidStateException.Operation">
+            <summary>
+            Gets the attempted operation name.
+            </summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Exceptions.WorkflowTransitionNotFoundException">
+            <summary>
+            Thrown when a required workflow transition cannot be resolved.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Exceptions.WorkflowTransitionNotFoundException.#ctor(System.Guid,System.String)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Exceptions.WorkflowTransitionNotFoundException"/> class.
+            </summary>
+            <param name="stepId">Step identifier.</param>
+            <param name="transitionKey">Requested transition key.</param>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Exceptions.WorkflowTransitionNotFoundException.StepId">
+            <summary>
+            Gets the step identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Exceptions.WorkflowTransitionNotFoundException.TransitionKey">
+            <summary>
+            Gets the requested transition key.
+            </summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Exceptions.WorkflowVariableNotFoundException">
+            <summary>
+            Thrown when a required workflow variable cannot be resolved.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Exceptions.WorkflowVariableNotFoundException.#ctor(System.String)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Exceptions.WorkflowVariableNotFoundException"/> class.
+            </summary>
+            <param name="variableName">Missing variable name.</param>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Exceptions.WorkflowVariableNotFoundException.VariableName">
+            <summary>
+            Gets the missing variable name.
+            </summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Models.Definitions.WorkflowDefinition">
+            <summary>
+            Immutable published definition of a workflow graph for a tenant.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Definitions.WorkflowDefinition.Id">
+            <summary>
+            Gets or sets the workflow definition identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Definitions.WorkflowDefinition.OrganizationId">
+            <summary>
+            Gets or sets the owning organization identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Definitions.WorkflowDefinition.Name">
+            <summary>
+            Gets or sets the workflow name.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Definitions.WorkflowDefinition.Description">
+            <summary>
+            Gets or sets an optional description.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Definitions.WorkflowDefinition.Version">
+            <summary>
+            Gets or sets the definition version. Editing a published definition requires a new version.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Definitions.WorkflowDefinition.Status">
+            <summary>
+            Gets or sets the definition status.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Definitions.WorkflowDefinition.StartStepId">
+            <summary>
+            Gets or sets the identifier of the start step. Must reference exactly one step in <see cref="P:Nexa.WorkflowAutomation.Models.Definitions.WorkflowDefinition.Steps"/>.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Definitions.WorkflowDefinition.Steps">
+            <summary>
+            Gets or sets the ordered collection of step definitions.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Definitions.WorkflowDefinition.CreatedAt">
+            <summary>
+            Gets or sets the UTC creation timestamp.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Definitions.WorkflowDefinition.PublishedAt">
+            <summary>
+            Gets or sets the UTC publish timestamp.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Definitions.WorkflowDefinition.ArchivedAt">
+            <summary>
+            Gets or sets the UTC archive timestamp.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Definitions.WorkflowDefinition.CreatedBy">
+            <summary>
+            Gets or sets the creator identifier or name.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Definitions.WorkflowDefinition.Metadata">
+            <summary>
+            Gets or sets optional definition metadata.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Models.Definitions.WorkflowDefinition.FindStep(System.Guid)">
+            <summary>
+            Finds a step by identifier.
+            </summary>
+            <param name="stepId">Step identifier.</param>
+            <returns>The matching step, or <c>null</c>.</returns>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Models.Definitions.WorkflowStepDefinition">
+            <summary>
+            Defines a single step within a workflow definition.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Definitions.WorkflowStepDefinition.Id">
+            <summary>
+            Gets or sets the unique step identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Definitions.WorkflowStepDefinition.Name">
+            <summary>
+            Gets or sets the display name of the step.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Definitions.WorkflowStepDefinition.ActivityType">
+            <summary>
+            Gets or sets the activity type key used to resolve an <c>IWorkflowActivity</c>.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Definitions.WorkflowStepDefinition.Configuration">
+            <summary>
+            Gets or sets activity-specific configuration as JSON.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Definitions.WorkflowStepDefinition.NextStepId">
+            <summary>
+            Gets or sets the next step for linear success flow.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Definitions.WorkflowStepDefinition.FailureStepId">
+            <summary>
+            Gets or sets the step to execute when the activity fails and retries are exhausted.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Definitions.WorkflowStepDefinition.TimeoutStepId">
+            <summary>
+            Gets or sets the step to execute when a waiting activity times out.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Definitions.WorkflowStepDefinition.Transitions">
+            <summary>
+            Gets or sets conditional transitions used for branching outcomes.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Definitions.WorkflowStepDefinition.MaxAttempts">
+            <summary>
+            Gets or sets the maximum number of attempts including the first try.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Definitions.WorkflowStepDefinition.RetryDelay">
+            <summary>
+            Gets or sets the delay before a retry attempt.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Definitions.WorkflowStepDefinition.Timeout">
+            <summary>
+            Gets or sets an optional timeout for waiting activities.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Definitions.WorkflowStepDefinition.Metadata">
+            <summary>
+            Gets or sets optional step metadata.
+            </summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Models.Definitions.WorkflowTransitionDefinition">
+            <summary>
+            Defines a named conditional transition from a workflow step.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Definitions.WorkflowTransitionDefinition.Key">
+            <summary>
+            Gets or sets the transition key (for example, positive, negative, default).
+            Matching is case-insensitive at runtime.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Definitions.WorkflowTransitionDefinition.TargetStepId">
+            <summary>
+            Gets or sets the target step identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Definitions.WorkflowTransitionDefinition.Description">
+            <summary>
+            Gets or sets an optional human-readable description.
+            </summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Models.Events.WorkflowEvent">
+            <summary>
+            Normalized external event used to resume waiting workflow executions.
+            Provider-specific webhook payloads must be mapped by the consuming application.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Events.WorkflowEvent.Id">
+            <summary>
+            Gets or sets the unique event identifier used for idempotency.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Events.WorkflowEvent.OrganizationId">
+            <summary>
+            Gets or sets the owning organization identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Events.WorkflowEvent.WorkflowExecutionId">
+            <summary>
+            Gets or sets the optional workflow execution identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Events.WorkflowEvent.EventType">
+            <summary>
+            Gets or sets the normalized event type.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Events.WorkflowEvent.CorrelationId">
+            <summary>
+            Gets or sets an optional correlation identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Events.WorkflowEvent.EntityType">
+            <summary>
+            Gets or sets an optional entity type.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Events.WorkflowEvent.EntityId">
+            <summary>
+            Gets or sets an optional entity identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Events.WorkflowEvent.OccurredAt">
+            <summary>
+            Gets or sets the UTC occurrence timestamp.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Events.WorkflowEvent.Payload">
+            <summary>
+            Gets or sets the event payload.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Events.WorkflowEvent.Metadata">
+            <summary>
+            Gets or sets optional string metadata.
+            </summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Models.Executions.ResumeWorkflowFromEventRequest">
+            <summary>
+            Request used to resume a waiting workflow from an external event.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.ResumeWorkflowFromEventRequest.ExecutionId">
+            <summary>
+            Gets or sets the workflow execution identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.ResumeWorkflowFromEventRequest.Event">
+            <summary>
+            Gets or sets the normalized workflow event.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.ResumeWorkflowFromEventRequest.TransitionKey">
+            <summary>
+            Gets or sets an optional transition key selected by the event.
+            </summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Models.Executions.StartWorkflowRequest">
+            <summary>
+            Request used to start a new workflow execution.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.StartWorkflowRequest.WorkflowDefinitionId">
+            <summary>
+            Gets or sets the workflow definition identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.StartWorkflowRequest.OrganizationId">
+            <summary>
+            Gets or sets the owning organization identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.StartWorkflowRequest.EntityType">
+            <summary>
+            Gets or sets the generic entity type.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.StartWorkflowRequest.EntityId">
+            <summary>
+            Gets or sets the generic entity identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.StartWorkflowRequest.ConversationId">
+            <summary>
+            Gets or sets an optional conversation reference.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.StartWorkflowRequest.InitialVariables">
+            <summary>
+            Gets or sets optional initial variables.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.StartWorkflowRequest.Metadata">
+            <summary>
+            Gets or sets optional execution metadata.
+            </summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Models.Executions.WorkflowExecution">
+            <summary>
+            Represents one execution of a workflow for a generic entity.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowExecution.Id">
+            <summary>
+            Gets or sets the execution identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowExecution.OrganizationId">
+            <summary>
+            Gets or sets the owning organization identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowExecution.WorkflowDefinitionId">
+            <summary>
+            Gets or sets the workflow definition identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowExecution.WorkflowVersion">
+            <summary>
+            Gets or sets the workflow definition version used by this execution.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowExecution.EntityType">
+            <summary>
+            Gets or sets the generic entity type.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowExecution.EntityId">
+            <summary>
+            Gets or sets the generic entity identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowExecution.Status">
+            <summary>
+            Gets or sets the execution status.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowExecution.CurrentStepId">
+            <summary>
+            Gets or sets the current step definition identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowExecution.CurrentStepExecutionId">
+            <summary>
+            Gets or sets the current step execution identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowExecution.ConversationId">
+            <summary>
+            Gets or sets an optional conversation reference.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowExecution.CreatedAt">
+            <summary>
+            Gets or sets the UTC creation timestamp.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowExecution.StartedAt">
+            <summary>
+            Gets or sets the UTC start timestamp.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowExecution.WaitingSince">
+            <summary>
+            Gets or sets the UTC timestamp when waiting began.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowExecution.ResumeAt">
+            <summary>
+            Gets or sets the UTC timestamp when the execution may resume.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowExecution.CompletedAt">
+            <summary>
+            Gets or sets the UTC completion timestamp.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowExecution.CancelledAt">
+            <summary>
+            Gets or sets the UTC cancellation timestamp.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowExecution.FailedAt">
+            <summary>
+            Gets or sets the UTC failure timestamp.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowExecution.FailureReason">
+            <summary>
+            Gets or sets the failure reason when the execution failed.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowExecution.Revision">
+            <summary>
+            Gets or sets the optimistic concurrency revision.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowExecution.Context">
+            <summary>
+            Gets or sets the persisted execution context.
+            </summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Models.Executions.WorkflowExecutionContext">
+            <summary>
+            Persisted execution context containing entity identity and variables.
+            Runtime services must not be stored here.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowExecutionContext.OrganizationId">
+            <summary>
+            Gets or sets the owning organization identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowExecutionContext.EntityType">
+            <summary>
+            Gets or sets the generic entity type (product-defined).
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowExecutionContext.EntityId">
+            <summary>
+            Gets or sets the generic entity identifier (product-defined).
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowExecutionContext.ConversationId">
+            <summary>
+            Gets or sets an optional conversation reference owned by the consuming product.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowExecutionContext.Variables">
+            <summary>
+            Gets or sets the variable collection for this execution.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowExecutionContext.Metadata">
+            <summary>
+            Gets or sets optional execution metadata.
+            </summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Models.Executions.WorkflowHistoryEntry">
+            <summary>
+            Auditable history entry for a workflow execution.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowHistoryEntry.Id">
+            <summary>
+            Gets or sets the history entry identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowHistoryEntry.WorkflowExecutionId">
+            <summary>
+            Gets or sets the workflow execution identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowHistoryEntry.EventType">
+            <summary>
+            Gets or sets the history event type.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowHistoryEntry.OccurredAt">
+            <summary>
+            Gets or sets the UTC occurrence timestamp.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowHistoryEntry.Message">
+            <summary>
+            Gets or sets a human-readable message.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowHistoryEntry.Data">
+            <summary>
+            Gets or sets optional structured data.
+            </summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Models.Executions.WorkflowStepExecution">
+            <summary>
+            Represents a single attempt to execute a workflow step.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowStepExecution.Id">
+            <summary>
+            Gets or sets the step execution identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowStepExecution.WorkflowExecutionId">
+            <summary>
+            Gets or sets the parent workflow execution identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowStepExecution.StepDefinitionId">
+            <summary>
+            Gets or sets the step definition identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowStepExecution.ActivityType">
+            <summary>
+            Gets or sets the activity type executed by this step.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowStepExecution.Status">
+            <summary>
+            Gets or sets the step execution status.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowStepExecution.Attempt">
+            <summary>
+            Gets or sets the one-based attempt number.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowStepExecution.CreatedAt">
+            <summary>
+            Gets or sets the UTC creation timestamp.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowStepExecution.StartedAt">
+            <summary>
+            Gets or sets the UTC start timestamp.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowStepExecution.WaitingSince">
+            <summary>
+            Gets or sets the UTC timestamp when waiting began.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowStepExecution.ResumeAt">
+            <summary>
+            Gets or sets the UTC resume timestamp for delayed or timed-out waits.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowStepExecution.CompletedAt">
+            <summary>
+            Gets or sets the UTC completion timestamp.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowStepExecution.WaitingEventType">
+            <summary>
+            Gets or sets the event type this step is waiting for.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowStepExecution.CorrelationId">
+            <summary>
+            Gets or sets the correlation identifier used for event matching.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowStepExecution.ExternalReferenceId">
+            <summary>
+            Gets or sets an external provider reference identifier.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowStepExecution.Input">
+            <summary>
+            Gets or sets optional step input.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowStepExecution.Output">
+            <summary>
+            Gets or sets optional step output.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowStepExecution.ErrorCode">
+            <summary>
+            Gets or sets an optional error code.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowStepExecution.ErrorMessage">
+            <summary>
+            Gets or sets an optional error message.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Executions.WorkflowStepExecution.Metadata">
+            <summary>
+            Gets or sets optional step execution metadata.
+            </summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Models.Variables.WorkflowVariable">
+            <summary>
+            Represents a named variable stored on a workflow execution.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Models.Variables.WorkflowVariable.#ctor(System.String,System.Text.Json.JsonElement,Nexa.WorkflowAutomation.Enums.WorkflowVariableScope,System.DateTimeOffset)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Models.Variables.WorkflowVariable"/> class.
+            </summary>
+            <param name="name">Variable name.</param>
+            <param name="value">Variable value.</param>
+            <param name="scope">Variable scope.</param>
+            <param name="updatedAt">UTC update timestamp.</param>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Variables.WorkflowVariable.Name">
+            <summary>
+            Gets the variable name.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Variables.WorkflowVariable.Value">
+            <summary>
+            Gets the variable value.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Variables.WorkflowVariable.Scope">
+            <summary>
+            Gets the variable scope.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Variables.WorkflowVariable.UpdatedAt">
+            <summary>
+            Gets the UTC timestamp when the variable was last updated.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Models.Variables.WorkflowVariable.Update(System.Text.Json.JsonElement,Nexa.WorkflowAutomation.Enums.WorkflowVariableScope,System.DateTimeOffset)">
+            <summary>
+            Updates the variable value and scope.
+            </summary>
+            <param name="value">New value.</param>
+            <param name="scope">New scope.</param>
+            <param name="updatedAt">UTC update timestamp.</param>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Models.Variables.WorkflowVariableCollection">
+            <summary>
+            Case-insensitive collection of workflow variables.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Models.Variables.WorkflowVariableCollection.#ctor">
+            <summary>
+            Initializes an empty variable collection.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Models.Variables.WorkflowVariableCollection.#ctor(System.Collections.Generic.IEnumerable{Nexa.WorkflowAutomation.Models.Variables.WorkflowVariable})">
+            <summary>
+            Initializes a collection from existing variables.
+            </summary>
+            <param name="variables">Initial variables.</param>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Models.Variables.WorkflowVariableCollection.Count">
+            <summary>
+            Gets the number of variables in the collection.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Models.Variables.WorkflowVariableCollection.Contains(System.String)">
+            <summary>
+            Determines whether a variable with the specified name exists.
+            </summary>
+            <param name="name">Variable name.</param>
+            <returns><c>true</c> if the variable exists; otherwise <c>false</c>.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Models.Variables.WorkflowVariableCollection.Get``1(System.String)">
+            <summary>
+            Gets a strongly typed variable value.
+            </summary>
+            <typeparam name="T">Target type.</typeparam>
+            <param name="name">Variable name.</param>
+            <returns>The deserialized value, or default when missing.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Models.Variables.WorkflowVariableCollection.TryGet``1(System.String,``0@)">
+            <summary>
+            Attempts to get a strongly typed variable value.
+            </summary>
+            <typeparam name="T">Target type.</typeparam>
+            <param name="name">Variable name.</param>
+            <param name="value">Deserialized value when found.</param>
+            <returns><c>true</c> when the variable exists; otherwise <c>false</c>.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Models.Variables.WorkflowVariableCollection.TryGetElement(System.String,System.Text.Json.JsonElement@)">
+            <summary>
+            Attempts to get the raw <see cref="T:System.Text.Json.JsonElement"/> for a variable.
+            </summary>
+            <param name="name">Variable name.</param>
+            <param name="value">Cloned JSON value when found.</param>
+            <returns><c>true</c> when the variable exists; otherwise <c>false</c>.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Models.Variables.WorkflowVariableCollection.Set``1(System.String,``0,Nexa.WorkflowAutomation.Enums.WorkflowVariableScope,System.Nullable{System.DateTimeOffset})">
+            <summary>
+            Sets a variable value.
+            </summary>
+            <typeparam name="T">Value type.</typeparam>
+            <param name="name">Variable name.</param>
+            <param name="value">Value to store.</param>
+            <param name="scope">Variable scope.</param>
+            <param name="updatedAt">Optional UTC timestamp. Defaults to <see cref="P:System.DateTimeOffset.UtcNow"/>.</param>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Models.Variables.WorkflowVariableCollection.Set(System.String,System.Text.Json.JsonElement,Nexa.WorkflowAutomation.Enums.WorkflowVariableScope,System.Nullable{System.DateTimeOffset})">
+            <summary>
+            Sets a variable from a <see cref="T:System.Text.Json.JsonElement"/>.
+            </summary>
+            <param name="name">Variable name.</param>
+            <param name="value">JSON value.</param>
+            <param name="scope">Variable scope.</param>
+            <param name="updatedAt">Optional UTC timestamp.</param>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Models.Variables.WorkflowVariableCollection.Merge(System.Collections.Generic.IReadOnlyDictionary{System.String,System.Text.Json.JsonElement},Nexa.WorkflowAutomation.Enums.WorkflowVariableScope,System.Nullable{System.DateTimeOffset})">
+            <summary>
+            Merges variables from a dictionary into this collection.
+            </summary>
+            <param name="variables">Variables to merge.</param>
+            <param name="scope">Scope applied to merged values.</param>
+            <param name="updatedAt">UTC timestamp.</param>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Models.Variables.WorkflowVariableCollection.AsReadOnly">
+            <summary>
+            Returns a read-only snapshot of the variables.
+            </summary>
+            <returns>Read-only dictionary keyed by variable name.</returns>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Serialization.JsonElementHelper">
+            <summary>
+            Helpers for safely cloning and converting <see cref="T:System.Text.Json.JsonElement"/> values.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Serialization.JsonElementHelper.Clone(System.Text.Json.JsonElement)">
+            <summary>
+            Clones a <see cref="T:System.Text.Json.JsonElement"/> so its lifetime is independent of the original document.
+            </summary>
+            <param name="element">Element to clone.</param>
+            <returns>A cloned element.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Serialization.JsonElementHelper.Parse(System.String)">
+            <summary>
+            Parses JSON text into a cloned <see cref="T:System.Text.Json.JsonElement"/>.
+            </summary>
+            <param name="json">JSON text.</param>
+            <returns>Cloned root element.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Serialization.JsonElementHelper.EmptyObject">
+            <summary>
+            Creates an empty JSON object element.
+            </summary>
+            <returns>Empty object element.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Serialization.JsonElementHelper.Null">
+            <summary>
+            Creates a null JSON element.
+            </summary>
+            <returns>Null element.</returns>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Serialization.WorkflowJsonSerializer">
+            <summary>
+            Provides explicit System.Text.Json options for workflow automation types.
+            Does not mutate global serializer settings.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Serialization.WorkflowJsonSerializer.Options">
+            <summary>
+            Gets the recommended serializer options for workflow models and activity configuration.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Serialization.WorkflowJsonSerializer.CreateOptions">
+            <summary>
+            Creates a new options instance with workflow defaults.
+            </summary>
+            <returns>Configured options.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Serialization.WorkflowJsonSerializer.Serialize``1(``0)">
+            <summary>
+            Serializes a value to JSON text.
+            </summary>
+            <typeparam name="T">Value type.</typeparam>
+            <param name="value">Value to serialize.</param>
+            <returns>JSON text.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Serialization.WorkflowJsonSerializer.Deserialize``1(System.String)">
+            <summary>
+            Deserializes JSON text to a value.
+            </summary>
+            <typeparam name="T">Target type.</typeparam>
+            <param name="json">JSON text.</param>
+            <returns>Deserialized value.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Serialization.WorkflowJsonSerializer.Deserialize``1(System.Text.Json.JsonElement)">
+            <summary>
+            Deserializes a <see cref="T:System.Text.Json.JsonElement"/> to a value.
+            </summary>
+            <typeparam name="T">Target type.</typeparam>
+            <param name="element">JSON element.</param>
+            <returns>Deserialized value.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Serialization.WorkflowJsonSerializer.SerializeToElement``1(``0)">
+            <summary>
+            Serializes a value to a cloned <see cref="T:System.Text.Json.JsonElement"/>.
+            </summary>
+            <typeparam name="T">Value type.</typeparam>
+            <param name="value">Value to serialize.</param>
+            <returns>Cloned JSON element.</returns>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Utilities.ActivityConfigurationReader">
+            <summary>
+            Helper for reading strongly typed activity configuration from <see cref="T:System.Text.Json.JsonElement"/>.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Utilities.ActivityConfigurationReader.Read``1(System.String,System.Text.Json.JsonElement)">
+            <summary>
+            Deserializes activity configuration.
+            </summary>
+            <typeparam name="T">Configuration type.</typeparam>
+            <param name="activityType">Activity type for error messages.</param>
+            <param name="configuration">Configuration JSON.</param>
+            <returns>Deserialized configuration.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Utilities.ActivityConfigurationReader.GetRequiredString(System.String,System.Text.Json.JsonElement,System.String)">
+            <summary>
+            Gets a required string property from a JSON object.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Utilities.ActivityConfigurationReader.GetOptionalString(System.Text.Json.JsonElement,System.String)">
+            <summary>
+            Gets an optional string property.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Utilities.ActivityConfigurationReader.GetOptionalInt(System.Text.Json.JsonElement,System.String)">
+            <summary>
+            Gets an optional integer property.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Utilities.ActivityConfigurationReader.GetOptionalBool(System.Text.Json.JsonElement,System.String,System.Boolean)">
+            <summary>
+            Gets an optional boolean property.
+            </summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Utilities.ActivityServiceLocator">
+            <summary>
+            Resolves provider services from an activity execution context.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Utilities.ActivityServiceLocator.GetRequiredService``1(Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionContext,System.String)">
+            <summary>
+            Resolves a required service.
+            </summary>
+            <typeparam name="T">Service type.</typeparam>
+            <param name="context">Activity context.</param>
+            <param name="activityType">Activity type for error messages.</param>
+            <returns>Resolved service.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Utilities.ActivityServiceLocator.GetOptionalService``1(Nexa.WorkflowAutomation.Contracts.Activities.ActivityExecutionContext)">
+            <summary>
+            Resolves an optional service.
+            </summary>
+            <typeparam name="T">Service type.</typeparam>
+            <param name="context">Activity context.</param>
+            <returns>Resolved service, or <c>null</c>.</returns>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Utilities.ITemplateRenderer">
+            <summary>
+            Renders simple <c>{{VariableName}}</c> templates.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Utilities.ITemplateRenderer.Render(System.String,Nexa.WorkflowAutomation.Models.Variables.WorkflowVariableCollection)">
+            <summary>
+            Renders a template using workflow variables.
+            </summary>
+            <param name="template">Template text.</param>
+            <param name="variables">Variable collection.</param>
+            <returns>Rendered text.</returns>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Utilities.IWorkflowVariableResolver">
+            <summary>
+            Resolves workflow variables by name.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Utilities.IWorkflowVariableResolver.ResolveAsString(Nexa.WorkflowAutomation.Models.Variables.WorkflowVariableCollection,System.String)">
+            <summary>
+            Resolves a variable value as text.
+            </summary>
+            <param name="variables">Variable collection.</param>
+            <param name="name">Variable name.</param>
+            <returns>Text representation, or <c>null</c> when missing and behavior allows.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Utilities.IWorkflowVariableResolver.TryResolve(Nexa.WorkflowAutomation.Models.Variables.WorkflowVariableCollection,System.String,System.Text.Json.JsonElement@)">
+            <summary>
+            Attempts to resolve a raw JSON variable.
+            </summary>
+            <param name="variables">Variable collection.</param>
+            <param name="name">Variable name.</param>
+            <param name="value">Resolved value.</param>
+            <returns><c>true</c> when found; otherwise <c>false</c>.</returns>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Utilities.IWorkflowVariableResolver.ResolveRequired(Nexa.WorkflowAutomation.Models.Variables.WorkflowVariableCollection,System.String)">
+            <summary>
+            Resolves a required variable or throws.
+            </summary>
+            <param name="variables">Variable collection.</param>
+            <param name="name">Variable name.</param>
+            <returns>Resolved value.</returns>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Utilities.TemplateRenderer">
+            <summary>
+            Renders <c>{{VariableName}}</c> tokens using case-insensitive flat variable keys.
+            Nested names such as <c>Contact.FirstName</c> are treated as complete keys.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Utilities.TemplateRenderer.#ctor(Nexa.WorkflowAutomation.Utilities.IWorkflowVariableResolver,Nexa.WorkflowAutomation.Enums.MissingVariableBehavior)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Utilities.TemplateRenderer"/> class.
+            </summary>
+            <param name="variableResolver">Variable resolver.</param>
+            <param name="missingVariableBehavior">Missing variable behavior.</param>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Utilities.TemplateRenderer.Render(System.String,Nexa.WorkflowAutomation.Models.Variables.WorkflowVariableCollection)">
+            <inheritdoc />
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Utilities.TemplateRenderer.TokenRegex">
+            <remarks>
+            Pattern:<br/>
+            <code>\\{\\{\\s*([^}]+?)\\s*\\}\\}</code><br/>
+            Options:<br/>
+            <code>RegexOptions.Compiled</code><br/>
+            Explanation:<br/>
+            <code>
+            ○ Match the string "{{".<br/>
+            ○ Match a whitespace character greedily any number of times.<br/>
+            ○ 1st capture group.<br/>
+                ○ Match a character other than '}' lazily at least once.<br/>
+            ○ Match a whitespace character atomically any number of times.<br/>
+            ○ Match the string "}}".<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Utilities.WorkflowVariableResolver">
+            <summary>
+            Default case-insensitive workflow variable resolver.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Utilities.WorkflowVariableResolver.#ctor(Nexa.WorkflowAutomation.Enums.MissingVariableBehavior)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Utilities.WorkflowVariableResolver"/> class.
+            </summary>
+            <param name="missingVariableBehavior">Behavior when a variable is missing.</param>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Utilities.WorkflowVariableResolver.ResolveAsString(Nexa.WorkflowAutomation.Models.Variables.WorkflowVariableCollection,System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Utilities.WorkflowVariableResolver.TryResolve(Nexa.WorkflowAutomation.Models.Variables.WorkflowVariableCollection,System.String,System.Text.Json.JsonElement@)">
+            <inheritdoc />
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Utilities.WorkflowVariableResolver.ResolveRequired(Nexa.WorkflowAutomation.Models.Variables.WorkflowVariableCollection,System.String)">
+            <inheritdoc />
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Validation.WorkflowDefinitionValidator">
+            <summary>
+            Default workflow definition validator.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Validation.WorkflowDefinitionValidator.Validate(Nexa.WorkflowAutomation.Models.Definitions.WorkflowDefinition)">
+            <inheritdoc />
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Validation.WorkflowValidationError">
+            <summary>
+            A single workflow definition validation finding.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Validation.WorkflowValidationError.#ctor(System.String,System.String,Nexa.WorkflowAutomation.Enums.WorkflowValidationSeverity,System.Nullable{System.Guid})">
+            <summary>
+            Initializes a new instance of the <see cref="T:Nexa.WorkflowAutomation.Validation.WorkflowValidationError"/> class.
+            </summary>
+            <param name="code">Error code.</param>
+            <param name="message">Human-readable message.</param>
+            <param name="severity">Severity.</param>
+            <param name="stepId">Optional related step identifier.</param>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Validation.WorkflowValidationError.Code">
+            <summary>
+            Gets the machine-readable error code.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Validation.WorkflowValidationError.Message">
+            <summary>
+            Gets the human-readable message.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Validation.WorkflowValidationError.Severity">
+            <summary>
+            Gets the severity.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Validation.WorkflowValidationError.StepId">
+            <summary>
+            Gets the optional related step identifier.
+            </summary>
+        </member>
+        <member name="T:Nexa.WorkflowAutomation.Validation.WorkflowValidationResult">
+            <summary>
+            Aggregated validation result for a workflow definition.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Validation.WorkflowValidationResult.IsValid">
+            <summary>
+            Gets a value indicating whether the definition is valid (no errors).
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Validation.WorkflowValidationResult.Errors">
+            <summary>
+            Gets all validation findings.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Validation.WorkflowValidationResult.ErrorFindings">
+            <summary>
+            Gets only error-severity findings.
+            </summary>
+        </member>
+        <member name="P:Nexa.WorkflowAutomation.Validation.WorkflowValidationResult.Warnings">
+            <summary>
+            Gets only warning-severity findings.
+            </summary>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Validation.WorkflowValidationResult.Add(Nexa.WorkflowAutomation.Validation.WorkflowValidationError)">
+            <summary>
+            Adds a validation finding.
+            </summary>
+            <param name="error">Finding to add.</param>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Validation.WorkflowValidationResult.AddError(System.String,System.String,System.Nullable{System.Guid})">
+            <summary>
+            Adds an error finding.
+            </summary>
+            <param name="code">Error code.</param>
+            <param name="message">Message.</param>
+            <param name="stepId">Optional step identifier.</param>
+        </member>
+        <member name="M:Nexa.WorkflowAutomation.Validation.WorkflowValidationResult.AddWarning(System.String,System.String,System.Nullable{System.Guid})">
+            <summary>
+            Adds a warning finding.
+            </summary>
+            <param name="code">Warning code.</param>
+            <param name="message">Message.</param>
+            <param name="stepId">Optional step identifier.</param>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.TokenRegex_0">
+            <summary>Custom <see cref="T:System.Text.RegularExpressions.Regex"/>-derived type for the TokenRegex method.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.TokenRegex_0.Instance">
+            <summary>Cached, thread-safe singleton instance.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.TokenRegex_0.#ctor">
+            <summary>Initializes the instance.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.TokenRegex_0.RunnerFactory">
+            <summary>Provides a factory for creating <see cref="T:System.Text.RegularExpressions.RegexRunner"/> instances to be used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.TokenRegex_0.RunnerFactory.CreateInstance">
+            <summary>Creates an instance of a <see cref="T:System.Text.RegularExpressions.RegexRunner"/> used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.TokenRegex_0.RunnerFactory.Runner">
+            <summary>Provides the runner that contains the custom logic implementing the specified regular expression.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.TokenRegex_0.RunnerFactory.Runner.Scan(System.ReadOnlySpan{System.Char})">
+            <summary>Scan the <paramref name="inputSpan"/> starting from base.runtextstart for the next match.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.TokenRegex_0.RunnerFactory.Runner.TryFindNextPossibleStartingPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Search <paramref name="inputSpan"/> starting from base.runtextpos for the next location a match could possibly start.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if a possible match was found; false if no more matches are possible.</returns>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.TokenRegex_0.RunnerFactory.Runner.TryMatchAtCurrentPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Determine whether <paramref name="inputSpan"/> at base.runtextpos is a match for the regular expression.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if the regular expression matches at the current position; otherwise, false.</returns>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.Utilities">
+            <summary>Helper methods used by generated <see cref="T:System.Text.RegularExpressions.Regex"/>-derived implementations.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_defaultTimeout">
+            <summary>Default timeout value set in <see cref="T:System.AppContext"/>, or <see cref="F:System.Text.RegularExpressions.Regex.InfiniteMatchTimeout"/> if none was set.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_hasTimeout">
+            <summary>Whether <see cref="F:System.Text.RegularExpressions.Generated.Utilities.s_defaultTimeout"/> is non-infinite.</summary>
+        </member>
+    </members>
+</doc>

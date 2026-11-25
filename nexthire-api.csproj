@@ -28,9 +28,26 @@
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.2.1" />
     <PackageReference Include="Dapper" Version="2.1.35" />
     <PackageReference Include="System.Data.SqlClient" Version="4.8.6" />
-    <PackageReference Include="Nexa.WorkflowAutomation" Version="0.1.1864" />
-    <PackageReference Include="Nexa.WorkflowAutomation.DependencyInjection" Version="0.1.1864" />
+  </ItemGroup>
+
+  <!--
+    Vendored Nexa.WorkflowAutomation 0.1.1864 (private Azure Artifacts feed).
+    CI agents only have nuget.org; keep these as file references so restore does not
+    require CreativeOneSolutions/Nexa feed authentication.
+  -->
+  <ItemGroup>
+    <Reference Include="Nexa.WorkflowAutomation">
+      <HintPath>lib\Nexa.WorkflowAutomation\Nexa.WorkflowAutomation.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Nexa.WorkflowAutomation.DependencyInjection">
+      <HintPath>lib\Nexa.WorkflowAutomation\Nexa.WorkflowAutomation.DependencyInjection.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="lib\Nexa.WorkflowAutomation\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
-
